@@ -23,8 +23,7 @@ blendcache_*/
 *.blend2
 *.blend3
 [Bb]ackup/
-render_output/*.png
-render_output/*.mp4
+render_output/
 !render_output/.gitkeep
 
 # ---- IDE / OS ----
