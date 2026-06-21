@@ -1,0 +1,11 @@
+# Normalise line endings across platforms (Windows checkout uses CRLF,
+# repo stores LF) -- keeps diffs clean and silences the CRLF warnings.
+* text=auto eol=lf
+
+# Binary assets -- never diff/normalise.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
+*.blend binary

@@ -1,0 +1,4 @@
+# KineTwin AI layer runtime deps.
+# Only numpy is needed for the metrics package (pure-Python math).
+# MediaPipe + OpenCV are added in slice ② (tracking/pipeline).
+numpy>=1.26
