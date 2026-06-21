@@ -1,4 +1,10 @@
 # KineTwin AI layer runtime deps.
-# Only numpy is needed for the metrics package (pure-Python math).
-# MediaPipe + OpenCV are added in slice ② (tracking/pipeline).
+#
+# numpy is the only dep needed for the metrics package (pure-Python math) and
+# for running the metrics/pipeline unit tests (which use synthetic data).
+# mediapipe + opencv are only required for the video tracking layer
+# (ai.tracking.hand_tracker / ai.pipeline.analyze_videos) -- import them lazily
+# so the metrics layer and its tests run without them installed.
 numpy>=1.26
+mediapipe>=0.10.14
+opencv-python>=4.8

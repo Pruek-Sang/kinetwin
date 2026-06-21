@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 minversion = "7.0"
 pythonpath = ["src"]
-testpaths = ["src/ai/tests", "tests"]
+testpaths = ["src/ai", "tests"]
 addopts = "-ra -q"
 
 [tool.ruff]
