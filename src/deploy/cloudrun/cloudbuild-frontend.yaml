@@ -15,7 +15,6 @@ substitutions:
   _REGION: "asia-southeast1"
   _PROJECT: "gen-lang-client-0658701327"
   _REPO: "kinetwin"
-  _SERVICE: "kinetwin-frontend"
   _VITE_API_URL: ""
 
 steps:
@@ -27,8 +26,6 @@ steps:
       - "src/frontend/Dockerfile"
       - "--build-arg"
       - "VITE_API_URL=${_VITE_API_URL}"
-      - "-t"
-      - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:${SHORT_SHA}"
       - "-t"
       - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:latest"
       - "src/frontend"
@@ -42,7 +39,6 @@ steps:
     timeout: "300s"
 
 images:
-  - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:${SHORT_SHA}"
   - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:latest"
 
 options:

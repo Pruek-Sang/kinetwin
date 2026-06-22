@@ -13,7 +13,6 @@ substitutions:
   _REGION: "asia-southeast1"
   _PROJECT: "gen-lang-client-0658701327"
   _REPO: "kinetwin"
-  _SERVICE: "kinetwin-backend"
 
 steps:
   - name: "gcr.io/cloud-builders/docker"

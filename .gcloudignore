@@ -1,0 +1,21 @@
+# Files excluded from `gcloud builds submit` source uploads.
+.git
+.github
+.agents
+bridge
+**/node_modules
+**/dist
+**/.vite
+render_output
+doc
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+.venv
+venv
+*.blend
+*.blend1
+*.blend2
+**/*.mp4
