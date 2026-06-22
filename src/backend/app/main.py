@@ -30,7 +30,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .schemas import AnalyzeReport, HandMetrics
-from .services import analyze_landmark_json, analyze_two_videos, get_reference_baseline
+from .services import (
+    analyze_landmark_json,
+    analyze_one_landmarks,
+    analyze_one_video,
+    analyze_two_videos,
+    get_reference_baseline,
+)
 
 MAX_VIDEO_BYTES = 80 * 1024 * 1024  # 80 MB per upload -- guard, not strict middleware
 
@@ -54,6 +60,11 @@ class LandmarksRequest(BaseModel):
     right: List[List[List[float]]]  # (T, 21, 3)
     weights: Optional[dict] = None
     gap: Optional[float] = None
+
+
+class OneLandmarksRequest(BaseModel):
+    fps: float = Field(30.0, gt=0)
+    landmarks: List[List[List[float]]]  # (T, 21, 3)
 
 
 @app.get("/")
@@ -114,6 +125,34 @@ async def analyze(
             except OSError:
                 pass
     return _to_report(report)
+
+
+@app.post("/analyze-one-landmarks")
+def analyze_one_landmarks_endpoint(req: OneLandmarksRequest):
+    if len(req.landmarks) < 2:
+        raise HTTPException(status_code=400, detail="need >= 2 frames")
+    return analyze_one_landmarks(req.landmarks, req.fps)
+
+
+@app.post("/analyze-one", response_model=dict)
+async def analyze_one(video: UploadFile = File(...)):
+    data = await video.read()
+    if len(data) > MAX_VIDEO_BYTES:
+        raise HTTPException(status_code=413, detail="video too large (max 80 MB)")
+    tmpdir = Path(tempfile.gettempdir())
+    path = tmpdir / f"kt_one_{uuid.uuid4().hex}{Path(video.filename or '.mp4').suffix}"
+    path.write_bytes(data)
+    try:
+        return analyze_one_video(str(path))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=f"analysis failed: {exc}")
+    finally:
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def _to_report(report: dict) -> AnalyzeReport:

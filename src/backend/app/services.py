@@ -11,7 +11,13 @@ from typing import Optional
 
 import numpy as np
 
-from ai.metrics import DEFAULT_LEARNED_NON_USE_GAP, DEFAULT_WEIGHTS, HandTrajectory, ReferenceBaseline
+from ai.metrics import (
+    DEFAULT_LEARNED_NON_USE_GAP,
+    DEFAULT_WEIGHTS,
+    HandTrajectory,
+    ReferenceBaseline,
+    score_hand,
+)
 from ai.pipeline import analyze_trajectories, analyze_videos
 from ai.tracking.reference import load_reference_trajectory
 
@@ -48,3 +54,45 @@ def analyze_two_videos(
 ) -> dict:
     bl = baseline or get_reference_baseline()
     return analyze_videos(left_path, right_path, baseline=bl, weights=weights, learned_non_use_gap=gap)
+
+
+# --------------------------------------------------------------- single hand --
+def _one_report(traj: HandTrajectory, baseline: ReferenceBaseline) -> dict:
+    breakdown = score_hand(traj, baseline)
+    raw = breakdown.raw
+    ratio = raw["mean_speed"] / baseline.mean_speed if baseline.mean_speed > 0 else 0.0
+    slower_pct = max(0.0, (1.0 - ratio)) * 100.0
+    nc = raw["dimensionless_jerk"]
+    bnc = baseline.dimensionless_jerk
+    smoother_ratio = (bnc / nc) if (bnc > 0 and nc > 0) else 0.0
+    return {
+        "score": {
+            "speed": round(breakdown.speed, 2),
+            "accuracy": round(breakdown.accuracy, 2),
+            "quality": round(breakdown.quality, 2),
+            "composite": round(breakdown.composite, 2),
+        },
+        "raw": {k: float(v) for k, v in raw.items()},
+        "vs_reference": {
+            "speed_ratio": round(ratio, 3),
+            "slower_than_normal_pct": round(slower_pct, 1),
+            "smoother_ratio": round(smoother_ratio, 3),
+        },
+    }
+
+
+def analyze_one_landmarks(landmarks, fps: float,
+                          baseline: Optional[ReferenceBaseline] = None) -> dict:
+    bl = baseline or get_reference_baseline()
+    traj = trajectories_from_landmarks(landmarks, fps, "patient")
+    return _one_report(traj, bl)
+
+
+def analyze_one_video(path: str,
+                      baseline: Optional[ReferenceBaseline] = None) -> dict:
+    from ai.tracking import track_video  # lazy (mediapipe)
+    bl = baseline or get_reference_baseline()
+    hands = track_video(path)
+    if not hands:
+        raise ValueError(f"no hand detected in video: {path}")
+    return _one_report(hands[0].trajectory, bl)
