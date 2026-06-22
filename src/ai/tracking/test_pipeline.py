@@ -19,8 +19,9 @@ from ai.tests.conftest import impaired_trajectory, normal_trajectory
 # --------------------------------------------------------------- conversion
 def _detections_from_trajectory(traj: HandTrajectory, label: str, start: int = 0):
     """Build FrameDetection stream that reproduces ``traj`` for one hand."""
+    dummy_image = [[0.0, 0.0]] * 21  # image landmarks not used by the trajectory path
     return [
-        FrameDetection(frame_index=start + t, hands=((label, traj.landmarks[t]),))
+        FrameDetection(frame_index=start + t, hands=((label, traj.landmarks[t], dummy_image),))
         for t in range(traj.n_frames)
     ]
 
@@ -35,8 +36,8 @@ def test_samples_to_trajectories_groups_two_hands():
         FrameDetection(
             frame_index=t,
             hands=(
-                ("Right", normal.landmarks[t]),
-                ("Left", impaired.landmarks[t]),
+                ("Right", normal.landmarks[t], [[0.0, 0.0]] * 21),
+                ("Left", impaired.landmarks[t], [[0.0, 0.0]] * 21),
             ),
         )
         for t in range(length)
@@ -50,7 +51,7 @@ def test_samples_to_trajectories_groups_two_hands():
 
 
 def test_samples_to_trajectories_drops_short_hands():
-    det = [FrameDetection(frame_index=0, hands=(("Right", np.zeros((21, 3)),),))]
+    det = [FrameDetection(frame_index=0, hands=(("Right", np.zeros((21, 3)), np.zeros((21, 2))),))]
     assert samples_to_trajectories(30.0, det, min_frames=2) == []
 
 

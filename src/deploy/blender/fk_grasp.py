@@ -21,7 +21,7 @@ from mathutils import Matrix, Vector
 
 STILL_OUT = r"C:\Users\Welcome\Desktop\tool\KineTwin (Kinematic Digital Twin)\render_output\grasp_test.png"
 CUP_POS = (0.0, 0.20, 0.05)        # fixed vertical cup (Z axis)
-ROOT_LOC = (0.05, -0.110, 0.158)   # hand brought to the cup, knuckles at (-0.055, 0.20, 0.05)
+ROOT_LOC = (0.05, -0.050, 0.245)   # hand brought to the cup, aligned to face the cup
 
 FINGER_BONES = [
     "f_index.01", "f_index.02", "f_index.03",
@@ -53,6 +53,13 @@ def fk_grasp() -> dict:
             cup.constraints.remove(c)
         cup.location = CUP_POS
         cup.rotation_euler = (0, 0, 0)
+        
+    # hide the ugly skin mesh + nails (skeleton replaces them)
+    for hide_name in ("Hand", "Nails"):
+        obj = bpy.data.objects.get(hide_name)
+        if obj:
+            obj.hide_render = True
+            obj.hide_set(True)
 
     # Rotate the armature object so the arm points along the world X-axis and palm is vertical
     R = Matrix((
@@ -131,7 +138,7 @@ def fk_grasp() -> dict:
     scene.render.resolution_y = 540
     scene.render.filepath = STILL_OUT
     bpy.ops.render.render(write_still=True)
-    return {"still": STILL_OUT, "finger_axis": FINGER_AXIS, "exists": os.path.exists(STILL_OUT)}
+    return {"still": STILL_OUT, "finger_axis": 0, "exists": os.path.exists(STILL_OUT)}
 
 
 if __name__ == "__main__" or "bpy" in dir():

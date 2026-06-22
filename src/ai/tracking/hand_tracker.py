@@ -1,53 +1,44 @@
-"""MediaPipe Hands video tracker.
+"""MediaPipe Hands video tracker (MediaPipe Tasks API).
 
-Reads a video with OpenCV, runs MediaPipe Hands on every frame, and turns the
-per-frame 3D landmark detections into :class:`~ai.metrics.HandTrajectory`
-objects (one per detected hand). MediaPipe is imported *lazily* inside the
-functions so that the rest of the AI layer (and its unit tests) does not pay the
-import cost or require the dependency.
+mediapipe >= 0.10.14 removed the legacy ``mp.solutions.hands`` API, so this
+uses the current **Tasks API** (``HandLandmarker`` with the
+``hand_landmarker.task`` model). The model is bundled at
+``models/hand_landmarker.task``.
 
-Two halves, kept separate for testability:
+One pass over the video captures, per frame, every detected hand's:
+  * ``handedness`` ("Left"/"Right"),
+  * **world** landmarks (relative-metric 3D, for the metrics), and
+  * **image** landmarks (normalised x,y in [0,1], for the canvas overlay).
 
-* :func:`extract_hand_samples` -- the thin MediaPipe/OpenCV part (needs a real
-  video + the ``mediapipe``/``opencv-python`` packages).
-* :func:`samples_to_trajectories` -- the pure-Python grouping/conversion part
-  (no MediaPipe, fully unit-testable with synthetic detections).
-
-Landmark source
----------------
-We use MediaPipe ``world_landmarks`` (relative-metric 3D, depth relative to the
-wrist) rather than the normalised image landmarks, because Speed/Quality
-metrics need real 3D motion. The scale is *relative* (no absolute metric
-calibration), so:
-
-* dimensionless jerk (Quality) and path straightness (Accuracy) are
-  scale-invariant and compare fairly;
-* mean speed (Speed) is in the same relative units and compares fairly **within
-  one recording setup** (same camera distance).
+So ``analyze-one`` runs the detector exactly once and derives both the
+trajectory and the overlay from the same pass.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
-from typing import Callable, Iterable, Optional
+from typing import Callable, Optional
 
 import numpy as np
 
-from ..metrics import N_LANDMARKS
 from ..metrics.trajectory import HandTrajectory
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "hand_landmarker.task")
 
 
 @dataclass(frozen=True)
 class FrameDetection:
-    """All hands detected in a single video frame."""
+    """All hands detected in one video frame.
+
+    Each hand is ``(handedness, world(21,3), image(21,2))``.
+    """
 
     frame_index: int
-    hands: tuple[tuple[str, np.ndarray], ...]  # ((handedness, (21, 3)), ...)
+    hands: tuple[tuple[str, np.ndarray, np.ndarray], ...]
 
 
 @dataclass(frozen=True)
 class TrackedHand:
-    """One hand tracked across (a subsequence of) frames."""
-
     handedness: str
     trajectory: HandTrajectory
 
@@ -59,19 +50,18 @@ class TrackedHand:
 # ----------------------------------------------------------------- pure logic
 def samples_to_trajectories(
     fps: float,
-    detections: Iterable[FrameDetection],
+    detections,
     min_frames: int = 2,
 ) -> list[TrackedHand]:
     """Group per-frame detections by handedness into one trajectory per hand.
 
-    Each hand is built from the subsequence of frames in which it was detected
-    (assumed contiguous for a dedicated task video). Hands seen in fewer than
-    ``min_frames`` frames are dropped.
+    Uses the WORLD landmarks (3D) for the metrics; the image landmarks are
+    ignored here (consumed by :func:`samples_to_overlay`).
     """
     grouped: dict[str, list[np.ndarray]] = {}
     for det in detections:
-        for handedness, landmarks in det.hands:
-            grouped.setdefault(handedness, []).append(np.asarray(landmarks, dtype=float))
+        for handedness, world, _image in det.hands:
+            grouped.setdefault(handedness, []).append(np.asarray(world, dtype=float))
 
     tracked: list[TrackedHand] = []
     for handedness, samples in grouped.items():
@@ -86,128 +76,105 @@ def samples_to_trajectories(
     return tracked
 
 
-# --------------------------------------------------------------- mediapipe part
-def _new_hands_detector(max_num_hands: int, model_complexity: int,
-                        min_detection_confidence: float,
-                        min_tracking_confidence: float):
-    """Create a MediaPipe Hands instance (lazy import)."""
-    import mediapipe as mp  # noqa: WPS433 -- lazy import on purpose
+def samples_to_overlay(detections) -> list:
+    """Per-frame IMAGE landmarks (21 [x,y] in [0,1]) of the first detected hand,
+    or ``None`` when no hand was found. Used to draw the skeleton overlay.
+    """
+    out: list = []
+    for det in detections:
+        if det.hands:
+            out.append(det.hands[0][2].tolist())
+        else:
+            out.append(None)
+    return out
 
-    return mp.solutions.hands.Hands(
-        static_image_mode=False,
-        max_num_hands=max_num_hands,
-        model_complexity=model_complexity,
-        min_detection_confidence=min_detection_confidence,
-        min_tracking_confidence=min_tracking_confidence,
+
+# --------------------------------------------------------------- mediapipe part
+def _make_landmarker(max_hands: int, running_mode, min_detection: float,
+                     min_presence: float, min_tracking: float):
+    """Create a HandLandmarker (Tasks API). Lazy import."""
+    from mediapipe.tasks import python as mp_tasks  # noqa: WPS433
+    from mediapipe.tasks.python import vision  # noqa: WPS433
+
+    options = vision.HandLandmarkerOptions(
+        base_options=mp_tasks.BaseOptions(model_asset_path=MODEL_PATH),
+        running_mode=running_mode,
+        num_hands=max_hands,
+        min_hand_detection_confidence=min_detection,
+        min_hand_presence_confidence=min_presence,
+        min_tracking_confidence=min_tracking,
     )
+    return vision.HandLandmarker.create_from_options(options)
 
 
 def extract_hand_samples(
     video_path: str,
     max_num_hands: int = 2,
-    model_complexity: int = 1,
-    min_detection_confidence: float = 0.6,
-    min_tracking_confidence: float = 0.6,
+    min_detection_confidence: float = 0.5,
+    min_tracking_confidence: float = 0.5,
     progress: Optional[Callable[[int, int], None]] = None,
 ) -> tuple[float, list[FrameDetection]]:
-    """Run MediaPipe Hands over every frame of ``video_path``.
+    """Run the HandLandmarker over every frame of ``video_path`` (one pass).
 
-    Returns ``(fps, detections)`` where ``detections[t]`` is the
-    :class:`FrameDetection` for frame ``t``. Frames with no hand still appear
-    (with an empty ``hands`` tuple) so frame indices stay aligned with time.
-    Needs ``mediapipe`` and ``opencv-python`` installed.
+    Returns ``(fps, detections)`` where each detection carries every hand's
+    world + image landmarks + handedness. Needs the ``mediapipe`` package and
+    the bundled ``hand_landmarker.task`` model.
     """
-    import cv2  # noqa: WPS433 -- lazy import on purpose
+    import cv2  # noqa: WPS433
+    import mediapipe as mp  # noqa: WPS433
+    from mediapipe.tasks.python import vision  # noqa: WPS433
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise FileNotFoundError(f"could not open video: {video_path}")
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
-    if fps <= 0:
-        fps = 30.0  # fallback when the container has no fps metadata
-
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 30.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+    landmarker = _make_landmarker(
+        max_num_hands, vision.RunningMode.VIDEO,
+        min_detection_confidence, min_detection_confidence, min_tracking_confidence,
+    )
+
     detections: list[FrameDetection] = []
     frame_index = 0
-    detector = _new_hands_detector(
-        max_num_hands, model_complexity,
-        min_detection_confidence, min_tracking_confidence,
-    )
     try:
         while True:
             ok, frame_bgr = cap.read()
             if not ok:
                 break
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            results = detector.process(frame_rgb)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
+            ts_ms = int(round(frame_index * 1000.0 / fps))
+            result = landmarker.detect_for_video(mp_image, ts_ms)
 
-            hands: list[tuple[str, np.ndarray]] = []
-            if results.multi_hand_world_landmarks and results.multi_handedness:
-                for handedness, wl in zip(
-                    results.multi_handedness, results.multi_hand_world_landmarks
-                ):
-                    label = handedness.classification[0].label  # "Left" / "Right"
-                    arr = np.array(
-                        [[lm.x, lm.y, lm.z] for lm in wl.landmark],
-                        dtype=float,
-                    )
-                    hands.append((label, arr))
+            worlds = result.hand_world_landmarks or []
+            imgs = result.hand_landmarks or []
+            cats = result.handedness or []
+
+            hands: list[tuple[str, np.ndarray, np.ndarray]] = []
+            for i, wl in enumerate(worlds):
+                label = "?"
+                if i < len(cats) and cats[i]:
+                    label = cats[i][0].category_name
+                world = np.array([[lm.x, lm.y, lm.z] for lm in wl], dtype=float)
+                image = None
+                if i < len(imgs):
+                    image = np.array([[lm.x, lm.y] for lm in imgs[i]], dtype=float)
+                if image is not None:
+                    hands.append((label, world, image))
+
             detections.append(FrameDetection(frame_index=frame_index, hands=tuple(hands)))
             frame_index += 1
             if progress is not None and total:
                 progress(frame_index, total)
     finally:
-        detector.close()
+        landmarker.close()
         cap.release()
 
     return fps, detections
 
 
 def track_video(video_path: str, **kwargs) -> list[TrackedHand]:
-    """Full convenience pipeline: video -> list of tracked hands."""
+    """Video -> tracked hands (convenience)."""
     fps, detections = extract_hand_samples(video_path, **kwargs)
     return samples_to_trajectories(fps, detections)
-
-
-def extract_overlay_landmarks(
-    video_path: str,
-    max_num_hands: int = 1,
-    model_complexity: int = 1,
-    min_detection_confidence: float = 0.6,
-    min_tracking_confidence: float = 0.6,
-) -> tuple[float, list]:
-    """Per-frame IMAGE-space landmarks (normalised x,y in [0,1]) of the first
-    detected hand, for drawing a skeleton overlay on top of the source video.
-
-    Returns ``(fps, frames)`` where ``frames[t]`` is a list of 21 ``[x, y]``
-    pairs, or ``None`` when no hand was found on that frame. Uses MediaPipe's
-    image landmarks (not the world landmarks used for metrics) so the overlay
-    lines up with the pixels.
-    """
-    import cv2  # noqa: WPS433 -- lazy import on purpose
-
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise FileNotFoundError(f"could not open video: {video_path}")
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 30.0
-    detector = _new_hands_detector(
-        max_num_hands, model_complexity,
-        min_detection_confidence, min_tracking_confidence,
-    )
-    frames: list = []
-    try:
-        while True:
-            ok, frame_bgr = cap.read()
-            if not ok:
-                break
-            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            results = detector.process(rgb)
-            if results.multi_hand_landmarks:
-                hl = results.multi_hand_landmarks[0]
-                frames.append([[lm.x, lm.y] for lm in hl.landmark])
-            else:
-                frames.append(None)
-    finally:
-        detector.close()
-        cap.release()
-    return fps, frames

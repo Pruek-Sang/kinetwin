@@ -65,28 +65,73 @@ def _material(name, color, emission=0.0, roughness=0.4):
         bsdf.inputs["Emission Strength"].default_value = emission
     return mat
 
+def _create_procedural_bone(name, length, radius, material):
+    import bmesh
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    
+    bm = bmesh.new()
+    segments = 8
+    rings = [
+        (0.0, radius * 1.1),
+        (min(length * 0.15, radius * 1.5), radius * 0.7),
+        (length * 0.5, radius * 0.45),
+        (length - min(length * 0.15, radius * 1.5), radius * 0.7),
+        (length, radius * 1.0)
+    ]
+    circle_verts = []
+    for i in range(segments):
+        angle = 2.0 * math.pi * i / segments
+        circle_verts.append((math.cos(angle), math.sin(angle) * 0.8))
+        
+    created_rings = []
+    for y, r in rings:
+        ring_verts = []
+        for cx, cz in circle_verts:
+            v = bm.verts.new((cx * r, y, cz * r))
+            ring_verts.append(v)
+        created_rings.append(ring_verts)
+        
+    for r_idx in range(len(created_rings) - 1):
+        ring1 = created_rings[r_idx]
+        ring2 = created_rings[r_idx + 1]
+        for i in range(segments):
+            bm.faces.new((ring1[i], ring1[(i + 1) % segments], ring2[(i + 1) % segments], ring2[i]))
+            
+    bm.faces.new(reversed(created_rings[0]))
+    bm.faces.new(created_rings[-1])
+    
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+    obj.data.materials.append(material)
+    
+    subsurf = obj.modifiers.new(name="Subdivision", type='SUBSURF')
+    subsurf.levels = 1
+    subsurf.render_levels = 2
+    return obj
+
 
 def _build_skeleton(arm):
-    bone_mat = _material("SkelBone", (0.90, 0.92, 0.95), emission=0.25)
-    joint_mat = _material("SkelJoint", (0.20, 0.85, 0.95), emission=1.6, roughness=0.3)
+    bone_mat = _material("SkelBone", (0.95, 0.94, 0.92), emission=0.0, roughness=0.3)
+    joint_mat = _material("SkelJoint", (0.85, 0.85, 0.85), emission=0.0, roughness=0.4)
 
-    # bone cylinders (rigid, bone-parented -> follow pose exactly)
+    # procedural bones (rigid, bone-parented -> follow pose exactly)
     for bone in arm.data.bones:
         L = bone.length
         if L < 1e-4:
             continue
-        bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=0.001, depth=L, location=(0, 0, 0))
-        c = bpy.context.active_object
-        c.name = "skel_" + bone.name
-        c.data.materials.append(bone_mat)
-        for p in c.data.polygons:
-            p.use_smooth = True
+        c = _create_procedural_bone("skel_" + bone.name, L, 0.0035, bone_mat)
         c.parent = arm
         c.parent_type = "BONE"
         c.parent_bone = bone.name
         c.matrix_parent_inverse = Matrix.Identity(4)
-        c.location = (0.0, L / 2.0, 0.0)
-        c.rotation_euler = (math.radians(90), 0, 0)
+        c.location = (0.0, 0.0, 0.0)
+        c.rotation_euler = (0, 0, 0)
 
     # landmark spheres at the 21 LM_* empties (already bone-parented in rig_hand)
     for i in range(21):
@@ -94,7 +139,7 @@ def _build_skeleton(arm):
         e = bpy.data.objects.get(ename)
         if not e:
             continue
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.002, location=(0, 0, 0))
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.0035, location=(0, 0, 0))
         s = bpy.context.active_object
         s.name = "joint_" + ename
         s.data.materials.append(joint_mat)
@@ -155,11 +200,11 @@ def animate() -> dict:
     # 3) keyframes -- reach/lift via root location
     root = arm.pose.bones["root"]
     root_keyframes = {
-        1: (0.05, -0.205, 0.158),
-        30: (0.05, -0.110, 0.158),    # reach forward in world X (local Y)
-        45: (0.05, -0.110, 0.158),    # grasp (hold position)
-        72: (0.13, -0.110, 0.158),    # lift up in world Z (local X)
-        90: (0.13, -0.110, 0.158),    # hold
+        1: (0.05, -0.205, 0.245),
+        30: (0.05, -0.050, 0.245),    # reach forward in world X (local Y)
+        45: (0.05, -0.050, 0.245),    # grasp (hold position)
+        72: (0.13, -0.050, 0.245),    # lift up in world Z (local X)
+        90: (0.13, -0.050, 0.245),    # hold
     }
     for f, loc in root_keyframes.items():
         scene.frame_set(f)

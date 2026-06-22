@@ -2,6 +2,7 @@
 minversion = "7.0"
 pythonpath = ["src"]
 testpaths = ["src/ai", "tests"]
+norecursedirs = ["src/deploy", "src/frontend", "node_modules", "render_output", ".git"]
 addopts = "-ra -q"
 
 [tool.ruff]

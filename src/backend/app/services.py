@@ -90,14 +90,13 @@ def analyze_one_landmarks(landmarks, fps: float,
 
 def analyze_one_video(path: str,
                       baseline: Optional[ReferenceBaseline] = None) -> dict:
-    from ai.tracking import track_video  # lazy (mediapipe)
-    from ai.tracking.hand_tracker import extract_overlay_landmarks
+    from ai.tracking.hand_tracker import extract_hand_samples, samples_to_overlay, samples_to_trajectories
     bl = baseline or get_reference_baseline()
-    hands = track_video(path)
+    fps, detections = extract_hand_samples(path)
+    hands = samples_to_trajectories(fps, detections)
     if not hands:
         raise ValueError(f"no hand detected in video: {path}")
     report = _one_report(hands[0].trajectory, bl)
-    # also grab per-frame IMAGE landmarks (normalised xy) for the canvas overlay
-    fps, overlay_frames = extract_overlay_landmarks(path)
-    report["overlay"] = {"fps": round(fps, 3), "frames": overlay_frames}
+    # overlay = per-frame image landmarks from the SAME pass (no second run)
+    report["overlay"] = {"fps": round(fps, 3), "frames": samples_to_overlay(detections)}
     return report
