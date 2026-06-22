@@ -1,0 +1,15 @@
+# keep docker build contexts lean + avoid leaking the 40 MB problem PDF
+.git
+.github
+**/__pycache__
+**/*.pyc
+.venv
+venv
+node_modules
+dist
+render_output
+doc
+*.blend
+*.mp4
+**/.pytest_cache
+**/.ruff_cache
