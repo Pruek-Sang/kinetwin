@@ -15,6 +15,7 @@ Timeline @ 30 fps, 90 frames (3 s):
 from __future__ import annotations
 
 import json
+import math
 import os
 
 import bpy
@@ -74,7 +75,7 @@ def _build_skeleton(arm):
         L = bone.length
         if L < 1e-4:
             continue
-        bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=0.0045, depth=L, location=(0, 0, 0))
+        bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=0.001, depth=L, location=(0, 0, 0))
         c = bpy.context.active_object
         c.name = "skel_" + bone.name
         c.data.materials.append(bone_mat)
@@ -93,7 +94,7 @@ def _build_skeleton(arm):
         e = bpy.data.objects.get(ename)
         if not e:
             continue
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.0085, location=(0, 0, 0))
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.002, location=(0, 0, 0))
         s = bpy.context.active_object
         s.name = "joint_" + ename
         s.data.materials.append(joint_mat)
@@ -110,6 +111,7 @@ def _build_skeleton(arm):
 def animate() -> dict:
     # 1) rebuild + rig
     exec(open(RIG_PATH, encoding="utf-8").read(), {"__name__": "__not_main__"})
+    arm = bpy.data.objects["HandRig"]
     hand = bpy.data.objects["Hand"]
 
     # hide the ugly skin mesh + nails (skeleton replaces them)

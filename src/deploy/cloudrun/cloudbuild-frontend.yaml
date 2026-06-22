@@ -1,0 +1,52 @@
+# =============================================================================
+# Cloud Build — KineTwin Frontend (React + nginx)  [SCAFFOLD-style]
+# =============================================================================
+# Usage:
+#   gcloud builds submit --config src/deploy/cloudrun/cloudbuild-frontend.yaml \
+#     --substitutions=_VITE_API_URL=https://kinetwin-backend-XXXX-de.a.run.app \
+#     --project gen-lang-client-0658701327
+#
+# _VITE_API_URL is the backend Cloud Run URL, baked into the bundle so the
+# browser calls the backend service directly (CORS is open on the backend).
+# Leave empty for same-origin (compose/dev).
+# =============================================================================
+
+substitutions:
+  _REGION: "asia-southeast1"
+  _PROJECT: "gen-lang-client-0658701327"
+  _REPO: "kinetwin"
+  _SERVICE: "kinetwin-frontend"
+  _VITE_API_URL: ""
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-frontend"
+    args:
+      - "build"
+      - "-f"
+      - "src/frontend/Dockerfile"
+      - "--build-arg"
+      - "VITE_API_URL=${_VITE_API_URL}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:${SHORT_SHA}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:latest"
+      - "src/frontend"
+    waitFor: ["-"]
+    timeout: "600s"
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-frontend"
+    args: ["push", "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:latest"]
+    waitFor: ["build-frontend"]
+    timeout: "300s"
+
+images:
+  - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/frontend:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: "E2_HIGHCPU_8"
+
+timeout: "1200s"

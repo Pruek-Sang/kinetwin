@@ -6,6 +6,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Bake the backend URL into the bundle (set at build time for Cloud Run).
+# Empty -> same-origin (works with the Vite dev proxy / nginx in compose).
+ARG VITE_API_URL=""
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 FROM nginx:alpine
