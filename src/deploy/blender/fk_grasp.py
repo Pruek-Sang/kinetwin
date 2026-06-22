@@ -21,11 +21,7 @@ from mathutils import Matrix, Vector
 
 STILL_OUT = r"C:\Users\Welcome\Desktop\tool\KineTwin (Kinematic Digital Twin)\render_output\grasp_test.png"
 CUP_POS = (0.0, 0.20, 0.05)        # fixed vertical cup (Z axis)
-ROOT_LOC = (0.05, -0.095, 0.158)   # hand brought to the cup, knuckles at (-0.040, 0.20, 0.05)
-FINGER_AXIS = 0                    # 0=X (hinge axis)
-FINGER_CURL = math.radians(98)     # base curl angle
-THUMB_AXIS = 0
-THUMB_CURL = math.radians(70)
+ROOT_LOC = (0.05, -0.110, 0.158)   # hand brought to the cup, knuckles at (-0.055, 0.20, 0.05)
 
 FINGER_BONES = [
     "f_index.01", "f_index.02", "f_index.03",
@@ -88,20 +84,34 @@ def fk_grasp() -> dict:
     arm.pose.bones["root"].location = ROOT_LOC
 
     # --- FK finger flexion around the cup (opposing curls) ---
-    # Index/Middle: curl negatively around local X to wrap to the left
-    INDEX_MIDDLE = ["f_index.01", "f_index.02", "f_index.03", "f_middle.01", "f_middle.02", "f_middle.03"]
-    # Ring/Pinky: curl positively around local X to wrap to the right
-    RING_PINKY = ["f_ring.01", "f_ring.02", "f_ring.03", "f_pinky.01", "f_pinky.02", "f_pinky.03"]
+    # Optimized collision-free angles:
+    # Index: MCP=51.17, PIP=34.86, DIP=19.97
+    # Middle: MCP=49.39, PIP=34.86, DIP=19.98
+    # Ring: MCP=50.65, PIP=34.86, DIP=19.98
+    # Pinky: MCP=52.27, PIP=34.88, DIP=19.97
+    # Thumb: 01=4.98, 02=-3.83, 03=1.54
+    angles = {
+        "f_index.01": -math.radians(51.17),
+        "f_index.02": -math.radians(34.86),
+        "f_index.03": -math.radians(19.97),
+        "f_middle.01": -math.radians(49.39),
+        "f_middle.02": -math.radians(34.86),
+        "f_middle.03": -math.radians(19.98),
+        "f_ring.01": math.radians(50.65),
+        "f_ring.02": math.radians(34.86),
+        "f_ring.03": math.radians(19.98),
+        "f_pinky.01": math.radians(52.27),
+        "f_pinky.02": math.radians(34.88),
+        "f_pinky.03": math.radians(19.97),
+        "thumb.01": math.radians(4.98),
+        "thumb.02": -math.radians(3.83),
+        "thumb.03": math.radians(1.54),
+    }
 
-    for bn in FINGER_BONES:
+    ALL_CURL_BONES = FINGER_BONES + THUMB_BONES
+    for bn in ALL_CURL_BONES:
         if bn in arm.pose.bones:
-            angle = -FINGER_CURL if bn in INDEX_MIDDLE else FINGER_CURL
-            _set_axis_rot(arm.pose.bones[bn], FINGER_AXIS, angle)
-
-    # --- thumb opposition (oppose by curling negatively) ---
-    for bn in THUMB_BONES:
-        if bn in arm.pose.bones:
-            _set_axis_rot(arm.pose.bones[bn], THUMB_AXIS, -THUMB_CURL)
+            _set_axis_rot(arm.pose.bones[bn], 0, angles.get(bn, 0.0))
 
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.context.evaluated_depsgraph_get().update()

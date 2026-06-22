@@ -102,7 +102,7 @@ function Panel({
       <div className={`px-3 py-1.5 text-[11px] font-semibold tracking-wider ${tone}`}>
         {label}
       </div>
-      <div className="aspect-video w-full bg-black">{children}</div>
+      <div className="h-[500px] w-full bg-black">{children}</div>
     </div>
   );
 }

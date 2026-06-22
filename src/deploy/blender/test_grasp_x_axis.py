@@ -60,7 +60,7 @@ def test_grasp_x_axis():
     # 4) Position the hand relative to the cup using the corrected math
     # We want knuckles to be at world (-0.038, 0.20, 0.05) to be right on the surface (radius 0.035 + some margin)
     root = arm.pose.bones["root"]
-    root.location = (0.05, -0.097, 0.158)
+    root.location = (0.05, -0.127, 0.158)
     
     # 5) Curl fingers around the cup with natural angles to wrap the surface (not penetrate)
     # Segment 1 (MCP): 42 degrees

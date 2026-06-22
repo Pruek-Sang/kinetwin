@@ -32,7 +32,7 @@ FINGER_CURL_BONES = [
     "f_middle.01", "f_middle.02", "f_middle.03",
     "f_ring.01", "f_ring.02", "f_ring.03",
     "f_pinky.01", "f_pinky.02", "f_pinky.03",
-    "thumb.02", "thumb.03",
+    "thumb.01", "thumb.02", "thumb.03",
 ]
 
 
@@ -53,11 +53,73 @@ def _add_cup(location, radius=0.035, height=0.10):
     return cup
 
 
+def _material(name, color, emission=0.0, roughness=0.4):
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = (*color, 1.0)
+    bsdf.inputs["Roughness"].default_value = roughness
+    if "Emission Color" in bsdf.inputs:
+        bsdf.inputs["Emission Color"].default_value = (*color, 1.0)
+        bsdf.inputs["Emission Strength"].default_value = emission
+    return mat
+
+
+def _build_skeleton(arm):
+    bone_mat = _material("SkelBone", (0.90, 0.92, 0.95), emission=0.25)
+    joint_mat = _material("SkelJoint", (0.20, 0.85, 0.95), emission=1.6, roughness=0.3)
+
+    # bone cylinders (rigid, bone-parented -> follow pose exactly)
+    for bone in arm.data.bones:
+        L = bone.length
+        if L < 1e-4:
+            continue
+        bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=0.0045, depth=L, location=(0, 0, 0))
+        c = bpy.context.active_object
+        c.name = "skel_" + bone.name
+        c.data.materials.append(bone_mat)
+        for p in c.data.polygons:
+            p.use_smooth = True
+        c.parent = arm
+        c.parent_type = "BONE"
+        c.parent_bone = bone.name
+        c.matrix_parent_inverse = Matrix.Identity(4)
+        c.location = (0.0, L / 2.0, 0.0)
+        c.rotation_euler = (math.radians(90), 0, 0)
+
+    # landmark spheres at the 21 LM_* empties (already bone-parented in rig_hand)
+    for i in range(21):
+        ename = f"LM_{i:02d}"
+        e = bpy.data.objects.get(ename)
+        if not e:
+            continue
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.0085, location=(0, 0, 0))
+        s = bpy.context.active_object
+        s.name = "joint_" + ename
+        s.data.materials.append(joint_mat)
+        for p in s.data.polygons:
+            p.use_smooth = True
+        s.parent = arm
+        s.parent_type = "BONE"
+        s.parent_bone = e.parent_bone
+        s.matrix_parent_inverse = Matrix.Identity(4)
+        s.location = e.location.copy()
+        s.rotation_euler = (0, 0, 0)
+
+
 def animate() -> dict:
     # 1) rebuild + rig
     exec(open(RIG_PATH, encoding="utf-8").read(), {"__name__": "__not_main__"})
-    arm = bpy.data.objects["HandRig"]
     hand = bpy.data.objects["Hand"]
+
+    # hide the ugly skin mesh + nails (skeleton replaces them)
+    for hide_name in ("Hand", "Nails"):
+        obj = bpy.data.objects.get(hide_name)
+        if obj:
+            obj.hide_render = True
+            obj.hide_set(True)
+
+    _build_skeleton(arm)
 
     if arm.animation_data:
         arm.animation_data_clear()
@@ -92,10 +154,10 @@ def animate() -> dict:
     root = arm.pose.bones["root"]
     root_keyframes = {
         1: (0.05, -0.205, 0.158),
-        30: (0.05, -0.095, 0.158),    # reach forward in world X (local Y)
-        45: (0.05, -0.095, 0.158),    # grasp (hold position)
-        72: (0.13, -0.095, 0.158),    # lift up in world Z (local X)
-        90: (0.13, -0.095, 0.158),    # hold
+        30: (0.05, -0.110, 0.158),    # reach forward in world X (local Y)
+        45: (0.05, -0.110, 0.158),    # grasp (hold position)
+        72: (0.13, -0.110, 0.158),    # lift up in world Z (local X)
+        90: (0.13, -0.110, 0.158),    # hold
     }
     for f, loc in root_keyframes.items():
         scene.frame_set(f)
@@ -103,20 +165,34 @@ def animate() -> dict:
         root.keyframe_insert(data_path="location", frame=f)
 
     # 4) keyframes -- grasp via finger curl (opposing curls)
-    INDEX_MIDDLE = ["f_index.01", "f_index.02", "f_index.03", "f_middle.01", "f_middle.02", "f_middle.03"]
-    RING_PINKY = ["f_ring.01", "f_ring.02", "f_ring.03", "f_pinky.01", "f_pinky.02", "f_pinky.03"]
-    THUMB = ["thumb.01", "thumb.02", "thumb.03"]
+    # Optimized collision-free angles:
+    # Index: MCP=51.17, PIP=34.86, DIP=19.97
+    # Middle: MCP=49.39, PIP=34.86, DIP=19.98
+    # Ring: MCP=50.65, PIP=34.86, DIP=19.98
+    # Pinky: MCP=52.27, PIP=34.88, DIP=19.97
+    # Thumb: 01=4.98, 02=-3.83, 03=1.54
+    import math
+    angles = {
+        "f_index.01": -math.radians(51.17),
+        "f_index.02": -math.radians(34.86),
+        "f_index.03": -math.radians(19.97),
+        "f_middle.01": -math.radians(49.39),
+        "f_middle.02": -math.radians(34.86),
+        "f_middle.03": -math.radians(19.98),
+        "f_ring.01": math.radians(50.65),
+        "f_ring.02": math.radians(34.86),
+        "f_ring.03": math.radians(19.98),
+        "f_pinky.01": math.radians(52.27),
+        "f_pinky.02": math.radians(34.88),
+        "f_pinky.03": math.radians(19.97),
+        "thumb.01": math.radians(4.98),
+        "thumb.02": -math.radians(3.83),
+        "thumb.03": math.radians(1.54),
+    }
 
     for bname in FINGER_CURL_BONES:
         pb = arm.pose.bones[bname]
-        if bname in INDEX_MIDDLE:
-            curl_angle = -1.7
-        elif bname in RING_PINKY:
-            curl_angle = 1.7
-        elif bname in THUMB:
-            curl_angle = -1.2
-        else:
-            curl_angle = 0.0
+        curl_angle = angles.get(bname, 0.0)
 
         for f, ang in {1: 0.0, 30: 0.0, 45: curl_angle, 90: curl_angle}.items():
             scene.frame_set(f)
