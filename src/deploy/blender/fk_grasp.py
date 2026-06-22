@@ -17,13 +17,15 @@ import os
 
 import bpy
 
+from mathutils import Matrix, Vector
+
 STILL_OUT = r"C:\Users\Welcome\Desktop\tool\KineTwin (Kinematic Digital Twin)\render_output\grasp_test.png"
 CUP_POS = (0.0, 0.20, 0.05)        # fixed vertical cup (Z axis)
-ROOT_LOC = (0.0, 0.085, 0.012)     # hand brought to the cup, fingertips just past it
-FINGER_AXIS = 0                    # 0=X, 1=Y, 2=Z  (hinge axis -- check your rig)
-FINGER_CURL = math.radians(-98)    # negative drapes fingers down/around the cup
+ROOT_LOC = (0.05, -0.095, 0.158)   # hand brought to the cup, knuckles at (-0.040, 0.20, 0.05)
+FINGER_AXIS = 0                    # 0=X (hinge axis)
+FINGER_CURL = math.radians(98)     # base curl angle
 THUMB_AXIS = 0
-THUMB_CURL = math.radians(-70)     # thumb opposes the fingers
+THUMB_CURL = math.radians(70)
 
 FINGER_BONES = [
     "f_index.01", "f_index.02", "f_index.03",
@@ -46,13 +48,24 @@ def fk_grasp() -> dict:
 
     # --- clear any previous animation + cup attachment so the cup stays put ---
     if arm.animation_data:
-        arm.animation_data.action = None
+        arm.animation_data_clear()
     cup = bpy.data.objects.get("Cup")
     if cup:
+        if cup.animation_data:
+            cup.animation_data_clear()
         for c in list(cup.constraints):
             cup.constraints.remove(c)
         cup.location = CUP_POS
         cup.rotation_euler = (0, 0, 0)
+
+    # Rotate the armature object so the arm points along the world X-axis and palm is vertical
+    R = Matrix((
+        (0.0, 1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, 0.0)
+    ))
+    arm.rotation_mode = "XYZ"
+    arm.rotation_euler = R.to_euler('XYZ')
 
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode="POSE")
@@ -74,17 +87,31 @@ def fk_grasp() -> dict:
     # --- bring the hand to the cup (translate the root only; rotations locked) ---
     arm.pose.bones["root"].location = ROOT_LOC
 
-    # --- FK finger flexion around the cup ---
+    # --- FK finger flexion around the cup (opposing curls) ---
+    # Index/Middle: curl negatively around local X to wrap to the left
+    INDEX_MIDDLE = ["f_index.01", "f_index.02", "f_index.03", "f_middle.01", "f_middle.02", "f_middle.03"]
+    # Ring/Pinky: curl positively around local X to wrap to the right
+    RING_PINKY = ["f_ring.01", "f_ring.02", "f_ring.03", "f_pinky.01", "f_pinky.02", "f_pinky.03"]
+
     for bn in FINGER_BONES:
         if bn in arm.pose.bones:
-            _set_axis_rot(arm.pose.bones[bn], FINGER_AXIS, FINGER_CURL)
-    # --- thumb opposition ---
+            angle = -FINGER_CURL if bn in INDEX_MIDDLE else FINGER_CURL
+            _set_axis_rot(arm.pose.bones[bn], FINGER_AXIS, angle)
+
+    # --- thumb opposition (oppose by curling negatively) ---
     for bn in THUMB_BONES:
         if bn in arm.pose.bones:
-            _set_axis_rot(arm.pose.bones[bn], THUMB_AXIS, THUMB_CURL)
+            _set_axis_rot(arm.pose.bones[bn], THUMB_AXIS, -THUMB_CURL)
 
     bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.context.view_layer.update()
+    bpy.context.evaluated_depsgraph_get().update()
+
+    # --- position the camera to frame this new X-axis orientation ---
+    cam = bpy.data.objects.get("Camera")
+    if cam:
+        cam.location = (-0.22, 0.20 - 0.28, 0.25)
+        target = Vector((0.0, 0.20, 0.08))
+        cam.rotation_euler = (target - cam.location).to_track_quat("-Z", "Y").to_euler()
 
     # --- render the grasp still ---
     scene = bpy.context.scene

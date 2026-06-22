@@ -3,6 +3,11 @@
 // proxies /analyze* and /health to the FastAPI backend on :8000).
 const API = import.meta.env.VITE_API_URL ?? "";
 
+export interface OverlayData {
+  fps: number;
+  frames: (number[][] | null)[]; // each frame: 21 [x,y] in [0,1], or null
+}
+
 export interface OneReport {
   score: { speed: number; accuracy: number; quality: number; composite: number };
   raw: Record<string, number>;
@@ -11,6 +16,7 @@ export interface OneReport {
     slower_than_normal_pct: number;
     smoother_ratio: number;
   };
+  overlay?: OverlayData;
 }
 
 export async function analyzeOne(video: File): Promise<OneReport> {

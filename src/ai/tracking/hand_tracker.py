@@ -167,3 +167,47 @@ def track_video(video_path: str, **kwargs) -> list[TrackedHand]:
     """Full convenience pipeline: video -> list of tracked hands."""
     fps, detections = extract_hand_samples(video_path, **kwargs)
     return samples_to_trajectories(fps, detections)
+
+
+def extract_overlay_landmarks(
+    video_path: str,
+    max_num_hands: int = 1,
+    model_complexity: int = 1,
+    min_detection_confidence: float = 0.6,
+    min_tracking_confidence: float = 0.6,
+) -> tuple[float, list]:
+    """Per-frame IMAGE-space landmarks (normalised x,y in [0,1]) of the first
+    detected hand, for drawing a skeleton overlay on top of the source video.
+
+    Returns ``(fps, frames)`` where ``frames[t]`` is a list of 21 ``[x, y]``
+    pairs, or ``None`` when no hand was found on that frame. Uses MediaPipe's
+    image landmarks (not the world landmarks used for metrics) so the overlay
+    lines up with the pixels.
+    """
+    import cv2  # noqa: WPS433 -- lazy import on purpose
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise FileNotFoundError(f"could not open video: {video_path}")
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 30.0
+    detector = _new_hands_detector(
+        max_num_hands, model_complexity,
+        min_detection_confidence, min_tracking_confidence,
+    )
+    frames: list = []
+    try:
+        while True:
+            ok, frame_bgr = cap.read()
+            if not ok:
+                break
+            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            results = detector.process(rgb)
+            if results.multi_hand_landmarks:
+                hl = results.multi_hand_landmarks[0]
+                frames.append([[lm.x, lm.y] for lm in hl.landmark])
+            else:
+                frames.append(None)
+    finally:
+        detector.close()
+        cap.release()
+    return fps, frames

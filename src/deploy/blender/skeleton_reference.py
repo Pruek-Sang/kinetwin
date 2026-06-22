@@ -67,20 +67,38 @@ def _apply_animation(arm):
         pb.rotation_euler = (0, 0, 0)
 
     root = arm.pose.bones["root"]
-    # Reach UP & FORWARD so the hand is poised ABOVE the cup (overhand grasp),
-    # then lift STRAIGHT UP (+Z only) so the cup rises in place, not forward.
-    root_keys = {1: (0, 0, 0), 30: (0, 0.07, 0.09), 55: (0, 0.07, 0.09),
-                 90: (0, 0.07, 0.15)}
+    # Animates a straight reach along world X and a vertical lift along world Z
+    root_keys = {
+        1: (0.05, -0.205, 0.158),
+        30: (0.05, -0.095, 0.158),
+        55: (0.05, -0.095, 0.158),
+        90: (0.13, -0.095, 0.158)
+    }
     for f, loc in root_keys.items():
         scene.frame_set(f); root.location = loc
         root.keyframe_insert(data_path="location", frame=f)
-    # Fingers DRAPE DOWN around the cup: NEGATIVE X rotates the +Y fingers
-    # toward -Z (down/around), wrapping the cup -- not folding up.
+
+    # Opposing finger curls:
+    # Index, Middle and Thumb curl negatively; Ring and Pinky curl positively
+    INDEX_MIDDLE = ["f_index.01", "f_index.02", "f_index.03", "f_middle.01", "f_middle.02", "f_middle.03"]
+    RING_PINKY = ["f_ring.01", "f_ring.02", "f_ring.03", "f_pinky.01", "f_pinky.02", "f_pinky.03"]
+    THUMB = ["thumb.01", "thumb.02", "thumb.03"]
+
     for bname in FINGER_CURL_BONES:
         pb = arm.pose.bones[bname]
-        for f, ang in {1: 0.0, 30: 0.0, 55: math.radians(-105), 90: math.radians(-105)}.items():
+        if bname in INDEX_MIDDLE:
+            curl_angle = -math.radians(98)
+        elif bname in RING_PINKY:
+            curl_angle = math.radians(98)
+        elif bname in THUMB:
+            curl_angle = -math.radians(70)
+        else:
+            curl_angle = 0.0
+
+        for f, ang in {1: 0.0, 30: 0.0, 55: curl_angle, 90: curl_angle}.items():
             scene.frame_set(f); pb.rotation_euler = (ang, 0, 0)
             pb.keyframe_insert(data_path="rotation_euler", frame=f)
+
     bpy.ops.object.mode_set(mode="OBJECT")
     scene.frame_set(1)
     bpy.context.view_layer.update()
@@ -132,12 +150,24 @@ def build_skeleton_reference() -> dict:
     exec(open(RIG_PATH, encoding="utf-8").read(), {"__name__": "__not_main__"})
     arm = bpy.data.objects["HandRig"]
 
+    if arm.animation_data:
+        arm.animation_data_clear()
+
     # hide the ugly skin mesh + nails (skeleton replaces them)
     for hide_name in ("Hand", "Nails"):
         obj = bpy.data.objects.get(hide_name)
         if obj:
             obj.hide_render = True
             obj.hide_set(True)
+
+    # Rotate the armature object so the arm points along the world X-axis and palm is vertical
+    R = Matrix((
+        (0.0, 1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, 0.0)
+    ))
+    arm.rotation_mode = "XYZ"
+    arm.rotation_euler = R.to_euler('XYZ')
 
     _apply_animation(arm)
     _build_skeleton(arm)
@@ -188,10 +218,9 @@ def build_skeleton_reference() -> dict:
     cam = bpy.data.objects["Camera"]
     cam.data.clip_start = 0.01
     cam.data.clip_end = 100.0
-    # Frame the action (cup ~ (0, 0.20, 0.10)) so the arm reads centred and a
-    # touch to the right of frame.
-    cam.location = (0.30, -0.28, 0.27)
-    target = Vector((-0.06, 0.18, 0.09))
+    # Frame the action centered on the horizontal X-axis layout
+    cam.location = (-0.22, 0.20 - 0.28, 0.25)
+    target = Vector((0.0, 0.20, 0.08))
     cam.rotation_euler = (target - cam.location).to_track_quat("-Z", "Y").to_euler()
     cam.data.lens = 50.0
     scene.camera = cam

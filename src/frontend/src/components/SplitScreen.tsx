@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
+import type { OverlayData } from "../api";
+import { HandOverlay } from "./HandOverlay";
 
 interface Props {
   patientUrl: string;
+  overlay: OverlayData | null;
   /** when true, keep the reference + patient roughly in sync on play */
   syncKey: number;
 }
 
 /**
- * Split-screen player: PATIENT video on the left, the ideal REFERENCE
- * (kinematic skeleton) on the right. One play/pause control drives both so the
- * viewer can compare speed side-by-side.
+ * Split-screen player: PATIENT video on the left (with a tracked-hand skeleton
+ * overlay), the ideal REFERENCE (kinematic skeleton) on the right. One
+ * play/pause control drives both so the viewer can compare side-by-side.
  */
-export function SplitScreen({ patientUrl, syncKey }: Props) {
+export function SplitScreen({ patientUrl, overlay, syncKey }: Props) {
   const patientRef = useRef<HTMLVideoElement>(null);
   const refRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -45,12 +48,15 @@ export function SplitScreen({ patientUrl, syncKey }: Props) {
       <div className="grid grid-cols-2 gap-px bg-kt-edge">
         <Panel label="PATIENT" tone="text-kt-amber">
           {patientUrl ? (
-            <video
-              ref={patientRef}
-              src={patientUrl}
-              className="h-full w-full object-contain bg-black"
-              playsInline
-            />
+            <div className="relative h-full w-full bg-black">
+              <video
+                ref={patientRef}
+                src={patientUrl}
+                className="h-full w-full object-contain"
+                playsInline
+              />
+              <HandOverlay videoRef={patientRef} overlay={overlay} />
+            </div>
           ) : (
             <Placeholder text="Upload a patient task video" />
           )}

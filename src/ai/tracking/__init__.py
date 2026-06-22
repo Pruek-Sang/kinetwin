@@ -5,6 +5,7 @@ from .hand_tracker import (
     FrameDetection,
     TrackedHand,
     extract_hand_samples,
+    extract_overlay_landmarks,
     samples_to_trajectories,
     track_video,
 )
@@ -13,6 +14,7 @@ __all__ = [
     "FrameDetection",
     "TrackedHand",
     "extract_hand_samples",
+    "extract_overlay_landmarks",
     "samples_to_trajectories",
     "track_video",
 ]

@@ -18,7 +18,7 @@ import json
 import os
 
 import bpy
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 RIG_PATH = r"C:\Users\Welcome\Desktop\tool\KineTwin (Kinematic Digital Twin)\src\deploy\blender\rig_hand.py"
 RENDER_DIR = r"C:\Users\Welcome\Desktop\tool\KineTwin (Kinematic Digital Twin)\render_output"
@@ -59,6 +59,18 @@ def animate() -> dict:
     arm = bpy.data.objects["HandRig"]
     hand = bpy.data.objects["Hand"]
 
+    if arm.animation_data:
+        arm.animation_data_clear()
+
+    # Rotate the armature object so the arm points along the world X-axis and palm is vertical
+    R = Matrix((
+        (0.0, 1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, 0.0)
+    ))
+    arm.rotation_mode = "XYZ"
+    arm.rotation_euler = R.to_euler('XYZ')
+
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode="POSE")
     for pb in arm.pose.bones:
@@ -79,21 +91,34 @@ def animate() -> dict:
     # 3) keyframes -- reach/lift via root location
     root = arm.pose.bones["root"]
     root_keyframes = {
-        1: (0, 0, 0),
-        30: (0, 0.05, 0.0),    # reach forward
-        45: (0, 0.05, 0.0),    # grasp (hold position)
-        72: (0, 0.05, 0.08),   # lift up
-        90: (0, 0.05, 0.08),   # hold
+        1: (0.05, -0.205, 0.158),
+        30: (0.05, -0.095, 0.158),    # reach forward in world X (local Y)
+        45: (0.05, -0.095, 0.158),    # grasp (hold position)
+        72: (0.13, -0.095, 0.158),    # lift up in world Z (local X)
+        90: (0.13, -0.095, 0.158),    # hold
     }
     for f, loc in root_keyframes.items():
         scene.frame_set(f)
         root.location = loc
         root.keyframe_insert(data_path="location", frame=f)
 
-    # 4) keyframes -- grasp via finger curl
+    # 4) keyframes -- grasp via finger curl (opposing curls)
+    INDEX_MIDDLE = ["f_index.01", "f_index.02", "f_index.03", "f_middle.01", "f_middle.02", "f_middle.03"]
+    RING_PINKY = ["f_ring.01", "f_ring.02", "f_ring.03", "f_pinky.01", "f_pinky.02", "f_pinky.03"]
+    THUMB = ["thumb.01", "thumb.02", "thumb.03"]
+
     for bname in FINGER_CURL_BONES:
         pb = arm.pose.bones[bname]
-        for f, ang in {1: 0.0, 30: 0.0, 45: 1.5, 90: 1.5}.items():
+        if bname in INDEX_MIDDLE:
+            curl_angle = -1.7
+        elif bname in RING_PINKY:
+            curl_angle = 1.7
+        elif bname in THUMB:
+            curl_angle = -1.2
+        else:
+            curl_angle = 0.0
+
+        for f, ang in {1: 0.0, 30: 0.0, 45: curl_angle, 90: curl_angle}.items():
             scene.frame_set(f)
             pb.rotation_euler = (ang, 0, 0)
             pb.keyframe_insert(data_path="rotation_euler", frame=f)
@@ -112,8 +137,8 @@ def animate() -> dict:
     # 6) camera framed on hand + cup
     cam = bpy.data.objects.get("Camera")
     if cam:
-        cam.location = (0.30, -0.22, 0.20)
-        target = Vector((0.0, 0.08, 0.07))
+        cam.location = (-0.22, 0.20 - 0.28, 0.25)
+        target = Vector((0.0, 0.20, 0.08))
         cam.rotation_euler = (target - cam.location).to_track_quat("-Z", "Y").to_euler()
         cam.data.lens = 50.0
         scene.camera = cam

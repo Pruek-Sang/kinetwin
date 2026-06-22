@@ -95,7 +95,11 @@ export default function App() {
 
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-semibold text-kt-muted">2 · Compare side-by-side</h2>
-        <SplitScreen patientUrl={url} syncKey={file ? file.size + file.lastModified : 0} />
+        <SplitScreen
+          patientUrl={url}
+          overlay={report?.overlay ?? null}
+          syncKey={file ? file.size + file.lastModified : 0}
+        />
       </section>
 
       <section className="mb-5 flex items-center gap-3">

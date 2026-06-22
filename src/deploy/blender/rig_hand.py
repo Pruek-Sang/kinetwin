@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 
 import bpy
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 BUILD_PATH = r"C:\Users\Welcome\Desktop\tool\KineTwin (Kinematic Digital Twin)\src\deploy\blender\build_reference_hand.py"
 PALM_Z = 0.042
@@ -196,9 +196,10 @@ def _create_landmark_empties(arm_obj):
         e.parent = arm_obj
         e.parent_type = "BONE"
         e.parent_bone = bone_name
+        e.matrix_parent_inverse = Matrix.Identity(4)
         bone = arm_obj.data.bones[bone_name]
-        # bone-local +Y runs head->tail; (0,0,0)=head, (0,length,0)=tail
-        e.location = (0.0, bone.length, 0.0) if at_tail else (0.0, 0.0, 0.0)
+        # bone-local +Y runs head->tail, with origin at tail
+        e.location = (0.0, 0.0, 0.0) if at_tail else (0.0, -bone.length, 0.0)
         empties.append(e)
     return empties
 
