@@ -1,0 +1,10 @@
+# KineTwin backend runtime deps.
+# The ai layer (../ai) is imported via sys.path; install its deps too
+# (numpy always; mediapipe+opencv only for video tracking).
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+pydantic>=2.5
+numpy>=1.26
+mediapipe>=0.10.14
+opencv-python>=4.8
