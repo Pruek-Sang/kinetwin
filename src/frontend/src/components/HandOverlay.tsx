@@ -57,6 +57,27 @@ export function HandOverlay({
       const fi = Math.round(video.currentTime * overlay.fps);
       const lm = overlay.frames[Math.max(0, Math.min(overlay.frames.length - 1, fi))];
       if (lm) {
+        // --- bounding box around the hand (recognisable "AI tracking" box) ---
+        const xs = lm.map((p) => ox + p[0] * dw);
+        const ys = lm.map((p) => oy + p[1] * dh);
+        const pad = Math.max(8, dw * 0.02);
+        const bx0 = Math.min(...xs) - pad;
+        const by0 = Math.min(...ys) - pad;
+        const bw = Math.max(...xs) - Math.min(...xs) + pad * 2;
+        const bh = Math.max(...ys) - Math.min(...ys) + pad * 2;
+        ctx.save();
+        ctx.strokeStyle = "#22d3ee";
+        ctx.lineWidth = Math.max(2, dw * 0.004);
+        ctx.setLineDash([8, 4]);
+        ctx.strokeRect(bx0, by0, bw, bh);
+        ctx.setLineDash([]);
+        // label
+        ctx.fillStyle = "#22d3ee";
+        ctx.font = `${Math.max(11, dw * 0.025)}px monospace`;
+        ctx.fillText("HAND TRACKED", bx0, by0 - 4);
+        ctx.restore();
+
+        // --- skeleton connections + joints ---
         ctx.lineWidth = Math.max(2, dw * 0.004);
         ctx.strokeStyle = "#22d3ee";
         ctx.shadowColor = "rgba(34,211,238,0.6)";
