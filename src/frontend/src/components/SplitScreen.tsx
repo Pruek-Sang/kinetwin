@@ -54,6 +54,7 @@ export function SplitScreen({ patientUrl, overlay, syncKey }: Props) {
                 src={patientUrl}
                 className="h-full w-full object-contain"
                 playsInline
+                muted
               />
               <HandOverlay videoRef={patientRef} overlay={overlay} />
             </div>
