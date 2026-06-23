@@ -18,10 +18,16 @@ from ai.tests.conftest import impaired_trajectory, normal_trajectory
 
 # --------------------------------------------------------------- conversion
 def _detections_from_trajectory(traj: HandTrajectory, label: str, start: int = 0):
-    """Build FrameDetection stream that reproduces ``traj`` for one hand."""
-    dummy_image = [[0.0, 0.0]] * 21  # image landmarks not used by the trajectory path
+    """Build FrameDetection stream that reproduces ``traj`` for one hand.
+
+    Image landmarks = the trajectory's x,y (so samples_to_trajectories which
+    now uses 2D image landmarks produces a meaningful trajectory).
+    """
     return [
-        FrameDetection(frame_index=start + t, hands=((label, traj.landmarks[t], dummy_image),))
+        FrameDetection(
+            frame_index=start + t,
+            hands=((label, traj.landmarks[t], traj.landmarks[t][:, :2].tolist()),),
+        )
         for t in range(traj.n_frames)
     ]
 

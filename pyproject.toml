@@ -3,7 +3,10 @@ minversion = "7.0"
 pythonpath = ["src"]
 testpaths = ["src/ai", "tests"]
 norecursedirs = ["src/deploy", "src/frontend", "node_modules", "render_output", ".git"]
-addopts = "-ra -q"
+addopts = "-ra -q -m 'not slow'"
+markers = [
+    "slow: marks tests as slow (deselected by default; run with -m slow)",
+]
 
 [tool.ruff]
 line-length = 100
