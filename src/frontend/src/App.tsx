@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { analyzeOne, health, type OneReport } from "./api";
+import { analyzeVideo } from "./lib/analyzer";
 import { SplitScreen } from "./components/SplitScreen";
 import { ScorePanel } from "./components/ScorePanel";
 
@@ -10,6 +11,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -18,10 +20,7 @@ export default function App() {
       const ok = await health();
       if (alive) setOnline(ok);
     }, 5000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
+    return () => { alive = false; clearInterval(id); };
   }, []);
 
   function onFile(f: File | null) {
@@ -36,12 +35,14 @@ export default function App() {
     if (!file) return;
     setLoading(true);
     setError("");
+    setStatusText("Uploading to backend…");
     try {
       setReport(await analyzeOne(file));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      setStatusText("");
     }
   }
 
@@ -49,24 +50,52 @@ export default function App() {
     setLoading(true);
     setError("");
     setReport(null);
+    setStatusText("Loading AI model…");
     try {
-      // Fetch video + PRE-BAKED result in parallel → overlay appears with video instantly
-      const [videoResp, resultResp] = await Promise.all([
-        fetch(`/samples/${name}.mp4`),
-        fetch(`/samples/${name}_result.json`),
-      ]);
+      // 1. Fetch video
+      const videoResp = await fetch(`/samples/${name}.mp4`);
       if (!videoResp.ok) throw new Error(`sample video not found`);
-      if (!resultResp.ok) throw new Error(`sample result not found`);
       const blob = await videoResp.blob();
-      const result = (await resultResp.json()) as OneReport;
       const f = new File([blob], `${name}.mp4`, { type: "video/mp4" });
       setFile(f);
-      setUrl(URL.createObjectURL(f));
-      setReport(result); // overlay + scores available IMMEDIATELY (no backend wait)
+      const vidUrl = URL.createObjectURL(f);
+      setUrl(vidUrl);
+
+      // 2. Wait for video metadata to load
+      await new Promise<void>((resolve) => {
+        const v = document.createElement("video");
+        v.src = vidUrl;
+        v.onloadedmetadata = () => resolve();
+      });
+
+      // 3. REAL analysis in browser (MediaPipe Web) — no pre-baked, no mock
+      setStatusText("AI tracking hand…");
+      const videoEl = document.querySelector("video") as HTMLVideoElement;
+      const { overlay, report: rpt } = await analyzeVideo(videoEl, (progOverlay) => {
+        // Progressive overlay update during tracking
+        setReport({ ...rpt, overlay: progOverlay } as OneReport);
+      });
+      setReport({ ...rpt, overlay } as OneReport);
+
+      // 4. Send landmarks to backend for AI classifier prediction
+      setStatusText("AI classifier predicting…");
+      try {
+        const predResp = await fetch(`${import.meta.env.VITE_API_URL ?? ""}/predict-landmarks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fps: overlay.fps, landmarks: overlay.frames.filter(Boolean) }),
+        });
+        if (predResp.ok) {
+          const pred = await predResp.json();
+          setReport((prev) => prev ? { ...prev, prediction: pred } as OneReport : prev);
+        }
+      } catch { /* backend prediction is optional bonus */ }
+
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      setStatusText("");
     }
   }
 
@@ -132,7 +161,7 @@ export default function App() {
           >
             ⚠ มืออ่อนแรง
           </button>
-          {loading && <span className="text-xs text-kt-cyan animate-pulse">Analyzing…</span>}
+          {loading && <span className="text-xs text-kt-cyan animate-pulse">{statusText || "Analyzing…"}</span>}
         </div>
       </section>
 
