@@ -45,6 +45,26 @@ export default function App() {
     }
   }
 
+  async function loadSample(name: string) {
+    setLoading(true);
+    setError("");
+    setReport(null);
+    try {
+      const resp = await fetch(`/samples/${name}.mp4`);
+      if (!resp.ok) throw new Error(`sample ${name} not found`);
+      const blob = await resp.blob();
+      const f = new File([blob], `${name}.mp4`, { type: "video/mp4" });
+      setFile(f);
+      setUrl(URL.createObjectURL(f));
+      const r = await analyzeOne(f);
+      setReport(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-6">
       <header className="mb-6 flex items-end justify-between">
@@ -90,6 +110,24 @@ export default function App() {
             className="hidden"
             onChange={(e) => onFile(e.target.files?.[0] ?? null)}
           />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-kt-muted">หรือลองตัวอย่าง:</span>
+          <button
+            onClick={() => loadSample("normal")}
+            disabled={loading}
+            className="rounded-lg bg-kt-green/15 px-3 py-1.5 text-sm font-semibold text-kt-green ring-1 ring-kt-green/40 transition hover:bg-kt-green/25 disabled:opacity-40"
+          >
+            ✋ มือปกติ
+          </button>
+          <button
+            onClick={() => loadSample("impaired")}
+            disabled={loading}
+            className="rounded-lg bg-kt-amber/15 px-3 py-1.5 text-sm font-semibold text-kt-amber ring-1 ring-kt-amber/40 transition hover:bg-kt-amber/25 disabled:opacity-40"
+          >
+            ⚠ มืออ่อนแรง
+          </button>
+          {loading && <span className="text-xs text-kt-cyan animate-pulse">Analyzing…</span>}
         </div>
       </section>
 
