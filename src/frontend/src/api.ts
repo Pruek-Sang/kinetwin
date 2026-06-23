@@ -6,6 +6,7 @@ const API = import.meta.env.VITE_API_URL ?? "";
 export interface OverlayData {
   fps: number;
   frames: (number[][] | null)[]; // each frame: 21 [x,y] in [0,1], or null
+  landmark_colors?: string[]; // per-landmark: "cyan" | "amber" | "red" (from backend)
 }
 
 export interface OneReport {
