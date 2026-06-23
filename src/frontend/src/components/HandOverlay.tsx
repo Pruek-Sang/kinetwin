@@ -49,21 +49,21 @@ export function HandOverlay({
     return deltas.map((d) => (d / count) / avg);
   }, [overlay]);
 
-  // ── Colour by stability ratio ──
+  // ── Colour by stability ratio (cyan=stable, amber=borderline, red=unstable) ──
   function pointColor(i: number): string {
     if (!stability) return "#22d3ee"; // default cyan
     const r = stability[i] ?? 1;
-    if (r > 1.5) return "#f87171"; // red — unstable
-    if (r > 1.2) return "#fbbf24"; // amber — borderline
-    return "#34d399";               // green — stable
+    if (r > 1.3) return "#f87171"; // red — unstable (lowered threshold)
+    if (r > 1.1) return "#fbbf24"; // amber — borderline
+    return "#22d3ee";               // cyan — stable (back to glossy cyan)
   }
 
   function connColor(a: number, b: number): string {
     if (!stability) return "#22d3ee";
     const r = Math.max(stability[a] ?? 1, stability[b] ?? 1);
-    if (r > 1.5) return "#f87171";
-    if (r > 1.2) return "#fbbf24";
-    return "#34d399";
+    if (r > 1.3) return "#f87171";
+    if (r > 1.1) return "#fbbf24";
+    return "#22d3ee";
   }
 
   useEffect(() => {
@@ -146,8 +146,10 @@ export function HandOverlay({
         }
       }
 
-      // ── Skeleton connections (colour per stability) ──
-      ctx.lineWidth = Math.max(2, dw * 0.005);
+      // ── Skeleton connections (thick + glow, colour per stability) ──
+      ctx.lineWidth = Math.max(3, dw * 0.008);
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = "rgba(34,211,238,0.5)";
       for (const [a, b] of HAND_CONNECTIONS) {
         ctx.strokeStyle = connColor(a, b);
         ctx.beginPath();
@@ -156,23 +158,28 @@ export function HandOverlay({
         ctx.stroke();
       }
 
-      // ── Landmark points (colour per stability) ──
+      // ── Landmark points (big + glow, colour per stability) ──
+      ctx.shadowBlur = 6;
       for (let i = 0; i < px.length; i++) {
         ctx.fillStyle = pointColor(i);
+        ctx.shadowColor = pointColor(i) + "88";
         ctx.beginPath();
-        ctx.arc(px[i][0], px[i][1], Math.max(3, dw * 0.007), 0, Math.PI * 2);
+        ctx.arc(px[i][0], px[i][1], Math.max(4, dw * 0.009), 0, Math.PI * 2);
         ctx.fill();
-        // ring for visibility
-        ctx.strokeStyle = "rgba(255,255,255,0.3)";
-        ctx.lineWidth = 1;
+        // white ring for contrast
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(255,255,255,0.4)";
+        ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.shadowBlur = 6;
       }
+      ctx.shadowBlur = 0;
 
       // ── Legend ──
       const legX = ox + 8;
       const legY = oy + dh - 60;
       ctx.font = `${Math.max(10, dw * 0.02)}px monospace`;
-      [["#34d399", "stable"], ["#fbbf24", "borderline"], ["#f87171", "unstable"]].forEach(
+      [["#22d3ee", "stable"], ["#fbbf24", "borderline"], ["#f87171", "unstable"]].forEach(
         ([c, label], idx) => {
           ctx.fillStyle = c as string;
           ctx.beginPath();
