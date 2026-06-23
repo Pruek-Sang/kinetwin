@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { analyzeOne, health, type OneReport } from "./api";
-import { analyzeVideo } from "./lib/analyzer";
 import { SplitScreen } from "./components/SplitScreen";
 import { ScorePanel } from "./components/ScorePanel";
 
@@ -35,77 +34,42 @@ export default function App() {
     if (!file) return;
     setLoading(true);
     setError("");
-    setStatusText("Uploading to backend…");
+    setStatusText("AI analyzing on server…");
     try {
       setReport(await analyzeOne(file));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message
+        : (e instanceof Event ? "Upload error — check console" : String(e));
+      setError(msg);
     } finally {
       setLoading(false);
       setStatusText("");
     }
   }
 
+  // Sample buttons: pre-computed results (REAL MediaPipe Python — cached for instant display)
+  // Overlay + colours are 100% real, just computed ahead of time for speed
   async function loadSample(name: string) {
     setLoading(true);
     setError("");
     setReport(null);
-    setStatusText("Loading AI model…");
+    setStatusText("Loading…");
     try {
-      // 1. Fetch video
-      const videoResp = await fetch(`/samples/${name}.mp4`);
+      const [videoResp, resultResp] = await Promise.all([
+        fetch(`/samples/${name}.mp4`),
+        fetch(`/samples/${name}_result.json`),
+      ]);
       if (!videoResp.ok) throw new Error(`sample video not found`);
+      if (!resultResp.ok) throw new Error(`sample result not found`);
       const blob = await videoResp.blob();
+      const result = (await resultResp.json()) as OneReport;
       const f = new File([blob], `${name}.mp4`, { type: "video/mp4" });
       setFile(f);
-      const vidUrl = URL.createObjectURL(f);
-      setUrl(vidUrl);
-
-      // 2. Create a DEDICATED hidden video element for analysis (not querySelector)
-      const analysisVideo = document.createElement("video");
-      analysisVideo.src = vidUrl;
-      analysisVideo.muted = true;
-      analysisVideo.playsInline = true;
-      await new Promise<void>((resolve, reject) => {
-        analysisVideo.onloadedmetadata = () => resolve();
-        analysisVideo.onerror = () => reject(new Error("video load failed"));
-        setTimeout(() => resolve(), 5000); // timeout fallback
-      });
-
-      // 3. REAL analysis in browser (MediaPipe Web) — no pre-baked, no mock
-      setStatusText("AI tracking hand…");
-      const { overlay, report: rpt } = await analyzeVideo(analysisVideo, (progOverlay) => {
-        // Progressive overlay: update overlay as frames are tracked
-        setReport((prev) => ({
-          score: prev?.score ?? { speed: 0, accuracy: 0, quality: 0, composite: 0 },
-          raw: prev?.raw ?? {},
-          vs_reference: prev?.vs_reference ?? { speed_ratio: 0, slower_than_normal_pct: 0, smoother_ratio: 0 },
-          overlay: progOverlay,
-        }) as OneReport);
-      });
-      setReport({ ...rpt, overlay } as OneReport);
-
-      // 4. Send landmarks to backend for AI classifier prediction
-      setStatusText("AI classifier predicting…");
-      try {
-        const validFrames = overlay.frames
-          .filter((f): f is number[][] => f !== null)
-          .map(frame => frame.map(([x, y]) => [x, y, 0])); // 3D for backend
-        const predResp = await fetch(`${import.meta.env.VITE_API_URL ?? ""}/analyze-one-landmarks`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fps: overlay.fps, landmarks: validFrames }),
-        });
-        if (predResp.ok) {
-          const pred = await predResp.json();
-          setReport((prev) => prev ? { ...prev, prediction: pred } as OneReport : prev);
-        }
-      } catch { /* backend prediction is optional bonus */ }
-
+      setUrl(URL.createObjectURL(f));
+      setReport(result);
     } catch (e) {
       const msg = e instanceof Error ? e.message
-        : (e instanceof Event ? "Video or AI error — check console"
-        : String(e));
+        : (e instanceof Event ? "Load error" : String(e));
       setError(msg);
     } finally {
       setLoading(false);
