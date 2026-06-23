@@ -18,4 +18,5 @@ venv
 *.blend
 *.blend1
 *.blend2
-**/*.mp4
+# exclude render artifacts but KEEP frontend sample videos
+render_output/**/*.mp4
