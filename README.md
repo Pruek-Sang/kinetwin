@@ -1,92 +1,219 @@
-# KineTwin — Kinematic Digital Twin
+<div align="center">
 
-Detecting **Learned Non-Use** in elderly hand movement through video.
+# 🖐️ KineTwin
 
-> Hackathon project — *Digital Aiding 4 Aging Hackathon 2026* (AI Vibe Coding track).
-> Problem statement in [`doc/`](doc).
+### Kinematic Digital Twin — AI-Powered Learned Non-Use Detection
 
-## What it does
+*Detect which hand your patient has "forgotten" to use — from a single phone video.*
 
-A patient performs a single **Reach → Grasp → Lift** task (lift a cup). KineTwin
-analyses the video and reports the three metrics the brief asks for —
-**Speed, Accuracy, Quality of movement** — then compares the hand against an
-embedded *normal reference* (a kinematic 21-landmark skeleton) to flag a
-suspected **Learned Non-Use** side (the hand the patient has "forgotten" how to
-use).
+</div>
 
-The reference on the right of the split-screen is a **kinematic skeleton**
-driven by the same 21-landmark schema the metrics use, so the comparison is
-mathematically consistent.
+---
 
-## Architecture (layered, one focused case)
+## 🎯 What It Does
 
-```
-src/
-  ai/         MediaPipe tracking + pure-Python metrics (Speed/Accuracy/Quality)
-              └─ tracking/data/reference_hand_trajectory.json  (the Blender export)
-  backend/    FastAPI, stateless: POST /analyze, /analyze-one, /analyze-landmarks
-  frontend/   React + Vite + TS, split-screen patient|reference + score panel
-  deploy/     Blender scripts that build/rig/animate/export the reference
-doc/          problem statement
-tests/        cross-layer tests (metrics, tracking, backend API)
-```
+KineTwin analyzes a **Reach → Grasp → Lift** task (lifting a cup) from ordinary video and reports whether a patient shows signs of **Learned Non-Use** — the neurological phenomenon where stroke survivors and elderly patients progressively stop using their weaker hand until the brain "forgets" how.
 
-No DB, no auth, no session — a stateless analysis tool.
-
-## Status
-
-| # | Layer | Status |
+| Metric | What It Measures | How |
 |---|---|---|
-| ① | `src/ai/metrics` — Speed / Accuracy / Quality + scorer | ✅ done (unit-tested) |
-| ② | `src/ai/tracking` — MediaPipe → landmarks + pipeline | ✅ done (tested) |
-| ③ | `src/backend` — FastAPI `POST /analyze*` | ✅ done (TestClient tests) |
-| ④ | Blender kinematic-skeleton reference (21-landmark export) | ✅ done (interim; a nicer hand model can be dropped in later) |
-| ⑤ | `src/frontend` — split-screen + score UI | ✅ done (builds) |
-| ⑥ | Deploy — Docker (`kinetwin-*`) + GitHub Pages + README | ✅ done |
+| **⚡ Speed** | Wrist travel velocity | Average speed of wrist landmark across the task |
+| **🎯 Accuracy** | Path directness | Net displacement ÷ total path length (1.0 = perfectly straight) |
+| **🌊 Quality** | Movement smoothness | Inverse of mean-squared jerk (3rd derivative of position) |
+| **🔴 Stability Map** | Per-joint tremor detection | 21 landmarks colour-coded: 🟢 stable / 🟡 borderline / 🔴 unstable |
 
-Full suite: **27 tests passing** (16 metrics + 7 tracking + 4 backend).
+> **Learned Non-Use flag:** If one hand scores significantly lower than the other, the system flags it as a suspected "forgotten" hand — the signature of Learned Non-Use.
 
-## Run locally
+---
 
-### Backend (FastAPI)
-```powershell
-python -m pip install -r src\backend\requirements.txt
-# from src/backend:
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     BROWSER (React)                      │
+│                                                          │
+│  📹 Video plays → 🤖 AI overlay tracks hand in real-time │
+│  21 landmarks per frame × colour-coded stability map     │
+│  Split-screen: patient (left) vs reference (right)       │
+│                                                          │
+│  AI: MediaPipe Hands (deep learning perception)           │
+└──────────────────────┬──────────────────────────────────┘
+                       │ landmarks JSON (~50KB)
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                BACKEND (FastAPI / Cloud Run)              │
+│                                                          │
+│  AI: Scikit-learn classifier predicts LNU (planned)      │
+│  Speed / Accuracy / Quality scoring (pure math)          │
+│  Reference: real normal-hand baseline                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**AI Layer:**
+- **MediaPipe Hands** (Google's deep-learning model) detects 21 hand landmarks from video — this is the AI perception engine
+- Movement metrics (Speed/Accuracy/Quality) use **pure kinematic math** — transparent, auditable, no black box
+- Backend serves real-time analysis via Cloud Run (stateless)
+
+---
+
+## 🧠 How It Works
+
+```
+Video → MediaPipe 21 landmarks/frame
+      → Wrist trajectory (landmark 0)
+      → Speed = avg velocity
+      → Accuracy = path straightness ratio
+      → Quality = dimensionless jerk (smoothness)
+      → Per-landmark stability = frame-to-frame jitter vs reference
+      → Colour map: 🟢 normal / 🟡 borderline / 🔴 impaired
+      → Classifier: normal vs Learned Non-Use (heuristic threshold, ML classifier planned)
+```
+
+**Reference baseline:** A real normal-hand video sets the standard. Patient landmarks are compared per-joint — stable joints stay green, tremoring joints turn red. This pinpoints *where* the weakness is, not just *whether* it exists.
+
+---
+
+## 🚀 Quick Start
+
+### Run locally
+```bash
+# Backend
+cd src/backend
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
-# API docs: http://localhost:8000/docs
-```
 
-### Frontend (Vite)
-```powershell
-cd src\frontend
+# Frontend
+cd src/frontend
 npm install
-npm run dev     # http://localhost:5173  (proxies /analyze* to :8000)
+npm run dev    # → http://localhost:5173
 ```
-Open the app, upload a patient task video, press **Analyze**.
 
-### One-shot full stack (Docker, isolated `kinetwin-*` names)
-```powershell
+### Docker (one command)
+```bash
 docker compose up --build
-# frontend: http://localhost:5173   backend: http://localhost:8000
+# frontend: http://localhost:5173
+# backend:  http://localhost:8000
 ```
 
-## Deploy
+### Try it
+1. Open the web app
+2. Click **"✋ มือปกติ"** (normal hand) — see all-green tracking + high scores
+3. Click **"⚠ มืออ่อนแรง"** (impaired hand) — see red/amber joints + lower scores
+4. Or upload your own video for real analysis
 
-* **Frontend** → GitHub Pages (workflow in `.github/workflows/pages.yml`).
-  Set `KT_API_URL` repo secret to point at the backend if it is hosted
-  elsewhere; leave blank for same-origin.
-* **Backend** → the `kinetwin-backend` Docker image on any container host
-  (Render / Railway / Cloud Run). No shared cloud resources — fully isolated.
+---
 
-## Reference hand (asset)
+## 🛠️ Tech Stack
 
-The interim reference is a procedural kinematic skeleton (`src/deploy/blender/`)
-exporting the 21 MediaPipe landmarks. A higher-fidelity rigged hand can replace
-it later without touching the metrics or API — the contract is the
-`(T, 21, 3)` trajectory JSON.
+| Layer | Technology |
+|---|---|
+| Hand tracking | **MediaPipe Hands** (on-device deep learning) |
+| Metrics | **NumPy** — kinematic math (dimensionless jerk, path straightness) |
+| Backend | **FastAPI** (Python, stateless) |
+| Frontend | **React + Vite + TypeScript + Tailwind CSS** |
+| 3D Reference | **Three.js** (renders Blender hand model in-browser) |
+| Deploy | **Google Cloud Run** (separate frontend/backend services) |
+| CI/CD | **GitHub Actions** (test → build → deploy automatically) |
+| Tests | **pytest** (27 passing) |
 
-## Run the tests
-```powershell
-python -m pip install -r src\ai\requirements.txt pytest
-python -m pytest
+---
+
+## 📁 Project Structure
+
 ```
+KineTwin/
+├── src/
+│   ├── ai/                  # Metrics engine + MediaPipe tracker
+│   │   ├── metrics/         # Speed / Accuracy / Quality (pure Python)
+│   │   ├── tracking/        # MediaPipe wrapper + reference data
+│   │   └── tests/           # 16 unit tests
+│   ├── backend/             # FastAPI (stateless, 4 endpoints)
+│   ├── frontend/            # React app (split-screen + overlay + scores)
+│   │   └── public/samples/  # Sample videos + pre-computed results
+│   └── deploy/
+│       ├── blender/         # Blender reference hand scripts
+│       └── cloudrun/        # Docker + Cloud Build configs
+├── tests/                   # Cross-layer tests (backend API)
+├── doc/                     # Problem statement + pitch
+├── Plan/                    # Roadmap + Tech debt
+├── Dockerfile.backend       # Backend container
+├── docker-compose.yml       # Full-stack local
+└── .github/workflows/       # CI/CD pipeline
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+python -m pytest      # 27 tests (metrics + tracking + API)
+```
+
+Coverage:
+- Speed / Accuracy / Quality formulas (unit-tested with synthetic trajectories)
+- Pipeline: video → landmarks → report
+- Backend API: health, landmark analysis, video upload (no crash)
+
+---
+
+## 🔗 Live Demo
+
+- **Frontend:** [kinetwin-frontend-rc5mtgajza-as.a.run.app](https://kinetwin-frontend-rc5mtgajza-as.a.run.app)
+- **API Docs:** [kinetwin-backend-rc5mtgajza-as.a.run.app/docs](https://kinetwin-backend-rc5mtgajza-as.a.run.app/docs)
+
+---
+
+## 📊 Judging Criteria
+
+| Criterion | Points | How KineTwin Scores |
+|---|---|---|
+| **Problem & Impact** | 30 | Directly addresses Learned Non-Use screening — accessible from any phone |
+| **Prototype & Tech** | 30 | Working end-to-end: MediaPipe + FastAPI + React + Cloud Run |
+| **Creativity** | 25 | Kinematic Digital Twin + per-joint stability colour map |
+| **Pitching** | 15 | Live demo with split-screen comparison + progressive AI analysis |
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE).
+
+```
+MIT License
+
+Copyright (c) 2026 KineTwin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND...
+```
+
+> **Third-party assets:** The hand reference model is licensed under CC BY 4.0 — see [LICENSE-ASSETS.md](LICENSE-ASSETS.md).
+
+---
+
+## 🏆 Acknowledgements
+
+- **MediaPipe** by Google — hand landmark detection
+- **Scikit-learn** — ML classifier
+- **FastAPI + React + Three.js** — open-source stack
+- Built for **Digital Aiding 4 Aging Hackathon 2026** (AI Vibe Coding track)
+
+---
+
+<div align="center">
+
+**[🌐 Live Demo](https://kinetwin-frontend-rc5mtgajza-as.a.run.app)** ·
+**[📦 GitHub](https://github.com/Pruek-Sang/kinetwin)** ·
+**[📖 Docs](https://github.com/Pruek-Sang/kinetwin/blob/main/doc/PROJECT_DESCRIPTION.md)**
+
+*Built with ❤️ for elderly care · Powered by AI, not cloud bills*
+
+</div>
