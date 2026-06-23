@@ -1,0 +1,127 @@
+name: CI/CD
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KineTwin CI/CD — separated frontend/backend, isolated kinetwin-* services.
+#
+# CI (every push + PR):
+#   • backend: pytest (unit + API + video-upload smoke)
+#   • frontend: npm build
+#
+# CD (push to main only, after CI passes):
+#   • deploy-backend  → build + push image → Cloud Run kinetwin-backend
+#   • deploy-frontend → build + push image (with backend URL) → Cloud Run kinetwin-frontend
+#
+# No live test, no gateway — just "build, push, deploy, done."
+#
+# Required GitHub secrets (one-time setup):
+#   GCP_SA_KEY      — service account JSON key (Cloud Run Admin + AR Writer)
+#   GCP_PROJECT_ID  — e.g. gen-lang-client-0658701327
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGION: asia-southeast1
+  REPO: kinetwin
+
+jobs:
+  # ─── CI: backend tests ──────────────────────────────────────────────────
+  ci-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r src/ai/requirements.txt pytest httpx
+      - name: Run tests
+        run: python -m pytest -q
+
+  # ─── CI: frontend build ─────────────────────────────────────────────────
+  ci-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  # ─── CD: deploy backend ─────────────────────────────────────────────────
+  deploy-backend:
+    needs: [ci-backend, ci-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - name: Build + push backend image
+        run: |
+          IMG=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/backend:latest
+          docker build -f Dockerfile.backend -t $IMG .
+          docker push $IMG
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy kinetwin-backend \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/backend:latest \
+            --region ${{ env.REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --port 8000 --memory 1Gi --cpu 1 --timeout 300 \
+            --allow-unauthenticated --quiet
+      - name: Get backend URL
+        id: url
+        run: |
+          URL=$(gcloud run services describe kinetwin-backend \
+            --region ${{ env.REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --format="value(status.url)")
+          echo "backend_url=$URL" >> $GITHUB_OUTPUT
+    outputs:
+      backend_url: ${{ steps.url.outputs.backend_url }}
+
+  # ─── CD: deploy frontend ────────────────────────────────────────────────
+  deploy-frontend:
+    needs: deploy-backend
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - name: Build + push frontend image
+        env:
+          BACKEND_URL: ${{ needs.deploy-backend.outputs.backend_url }}
+        run: |
+          IMG=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/frontend:latest
+          docker build -f src/frontend/Dockerfile \
+            --build-arg VITE_API_URL=$BACKEND_URL \
+            -t $IMG src/frontend
+          docker push $IMG
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy kinetwin-frontend \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/frontend:latest \
+            --region ${{ env.REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --port 8080 --memory 512Mi \
+            --allow-unauthenticated --quiet

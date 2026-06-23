@@ -53,3 +53,24 @@ def test_analyze_landmarks_rejects_too_few_frames():
     one = [[[0.0, 0.0, 0.0]] * 21]
     r = client.post("/analyze-landmarks", json={"fps": 30.0, "left": one, "right": one})
     assert r.status_code == 400
+
+
+def test_analyze_one_video_upload_does_not_crash(tmp_path):
+    """CI smoke test: POST a tiny dummy video -> must NOT return 500.
+
+    A 422 ('no hand detected') is the expected pass — the point is that the
+    upload -> file-write -> MediaPipe pipeline doesn't crash.
+    """
+    cv2 = pytest.importorskip("cv2")
+    import numpy as np
+
+    video = tmp_path / "dummy.mp4"
+    vw = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"mp4v"), 30, (64, 64))
+    for _ in range(5):
+        vw.write(np.zeros((64, 64, 3), np.uint8))
+    vw.release()
+
+    with open(video, "rb") as f:
+        r = client.post("/analyze-one", files={"video": ("dummy.mp4", f, "video/mp4")})
+    # 422 = no hand (expected); 200 = hand found; 500 = crash (FAIL)
+    assert r.status_code != 500, f"video upload crashed: {r.text}"
