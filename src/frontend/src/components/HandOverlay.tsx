@@ -125,17 +125,18 @@ export function HandOverlay({
       if (faLen > 1) {
         const ux = faDx / faLen;
         const uy = faDy / faLen;
-        const extLen = faLen * 1.8; // extend ~1.8× the hand length up the forearm
+        const extLen = faLen * 1.8;
         const ex = wrist[0] + ux * extLen;
         const ey = wrist[1] + uy * extLen;
         const faColor = pointColor(0);
         ctx.strokeStyle = faColor;
+        ctx.shadowColor = faColor + "99";
+        ctx.shadowBlur = 8;
         ctx.lineWidth = Math.max(3, dw * 0.006);
         ctx.beginPath();
         ctx.moveTo(wrist[0], wrist[1]);
         ctx.lineTo(ex, ey);
         ctx.stroke();
-        // dots along forearm
         for (let k = 0.3; k <= 1; k += 0.3) {
           const dx2 = wrist[0] + ux * extLen * k;
           const dy2 = wrist[1] + uy * extLen * k;
@@ -146,12 +147,13 @@ export function HandOverlay({
         }
       }
 
-      // ── Skeleton connections (thick + glow, colour per stability) ──
+      // ── Skeleton connections (thick + glow MATCHING each line's colour) ──
       ctx.lineWidth = Math.max(3, dw * 0.008);
       ctx.shadowBlur = 8;
-      ctx.shadowColor = "rgba(34,211,238,0.5)";
       for (const [a, b] of HAND_CONNECTIONS) {
-        ctx.strokeStyle = connColor(a, b);
+        const c = connColor(a, b);
+        ctx.strokeStyle = c;
+        ctx.shadowColor = c + "99"; // glow matches the line colour (not hardcoded cyan!)
         ctx.beginPath();
         ctx.moveTo(px[a][0], px[a][1]);
         ctx.lineTo(px[b][0], px[b][1]);
