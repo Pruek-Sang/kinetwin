@@ -88,8 +88,10 @@ export default function App() {
       // 4. Send landmarks to backend for AI classifier prediction
       setStatusText("AI classifier predicting…");
       try {
-        const validFrames = overlay.frames.filter((f): f is number[][] => f !== null);
-        const predResp = await fetch(`${import.meta.env.VITE_API_URL ?? ""}/predict-landmarks`, {
+        const validFrames = overlay.frames
+          .filter((f): f is number[][] => f !== null)
+          .map(frame => frame.map(([x, y]) => [x, y, 0])); // 3D for backend
+        const predResp = await fetch(`${import.meta.env.VITE_API_URL ?? ""}/analyze-one-landmarks`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fps: overlay.fps, landmarks: validFrames }),

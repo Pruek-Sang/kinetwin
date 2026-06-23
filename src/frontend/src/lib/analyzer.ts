@@ -38,7 +38,7 @@ let _landmarker: HandLandmarker | null = null;
 async function getLandmarker(): Promise<HandLandmarker> {
   if (_landmarker) return _landmarker;
   const fileset = await FilesetResolver.forVisionTasks(
-    "https://storage.googleapis.com/mediapipe-models/hand_landmarker/wasm"
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
   );
   _landmarker = await HandLandmarker.createFromOptions(fileset, {
     baseOptions: {

@@ -16,7 +16,7 @@ export function ReferenceSkeletonPlayer({ playing }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
-  const clockRef = useRef(new THREE.Clock());
+  const lastTimeRef = useRef(performance.now());
   const actionRef = useRef<THREE.AnimationAction | null>(null);
   const rafRef = useRef(0);
   const [loaded, setLoaded] = useState(false);
@@ -160,7 +160,9 @@ export function ReferenceSkeletonPlayer({ playing }: Props) {
     // Animation loop
     const animate = () => {
       rafRef.current = requestAnimationFrame(animate);
-      const delta = clockRef.current.getDelta();
+      const now = performance.now();
+      const delta = (now - lastTimeRef.current) / 1000;
+      lastTimeRef.current = now;
 
       if (mixerRef.current) {
         mixerRef.current.update(delta);
@@ -203,7 +205,7 @@ export function ReferenceSkeletonPlayer({ playing }: Props) {
     if (playing) {
       action.paused = false;
       action.play();
-      clockRef.current.start();
+      lastTimeRef.current = performance.now();
     } else {
       action.paused = true;
     }
