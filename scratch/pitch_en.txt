@@ -8,6 +8,12 @@ Welcome to KineTwin, a Kinematic Digital Twin system for detecting Learned Non-U
 
 On the left is a video of a patient performing a target-reaching task. On the right, our highlight: The Reference Hologram. The system renders a real-time, ergonomically perfect 3D skeleton. We can orbit and inspect the movement trajectory in full 360 degrees.
 
+We know that at this MVP stage, we still lack perfect accuracy and diverse datasets. But what we want to emphasize is that this technology does not stop at just the hand. We can construct models for the entire human body—ears, eyes, nose, mouth, or just the arms and legs. In an era where no one wants their raw media exposed to the public, finding a solution is crucial. Furthermore, hiring influencers or actors and training them to perform medically accurate motions is both difficult and incredibly expensive. 
+
+We believe that leveraging Blender technology solves all of this. It allows us to define the exact anatomical points we need to monitor. We can compare the patient's motion frame-by-frame against our flawless 3D reference. This tells us exactly where the problem is and what the future physical risks might be. 
+
+From here, we can integrate advanced AI systems—whether it's RAG, AI Agents, or Agentic workflows. By having the AI read our structured data, it can send personalized feedback directly to the patient. It will tell them exactly what rehabilitation exercises to do, diagnose potential conditions, and pinpoint which specific muscle groups need careful monitoring.
+
 Our AI extracts 21 joint landmarks from the patient's video and compares them against this Hologram to analyze three crucial metrics: First, Speed, to measure hesitation. Second, Accuracy, to measure the straightness of the reach. And third, Quality of Movement, to detect tremors or smoothness. If deviations or compensatory movements are found, the system immediately flags the arm for Learned Non-Use risk.
 
 In the future, KineTwin will be a highly accessible Web Application. Patients simply open their webcam at home and perform the tasks. The analyzed data is instantly sent to physical therapists.

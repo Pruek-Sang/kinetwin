@@ -49,21 +49,21 @@ export function HandOverlay({
     return deltas.map((d) => (d / count) / avg);
   }, [overlay]);
 
-  // ── Colour by stability ratio (cyan=stable, amber=borderline, red=unstable) ──
+  // ── Colour by stability ratio (neon vibrant colours) ──
   function pointColor(i: number): string {
-    if (!stability) return "#22d3ee"; // default cyan
+    if (!stability) return "#00e5ff"; // neon cyan
     const r = stability[i] ?? 1;
-    if (r > 1.3) return "#f87171"; // red — unstable (lowered threshold)
-    if (r > 1.1) return "#fbbf24"; // amber — borderline
-    return "#22d3ee";               // cyan — stable (back to glossy cyan)
+    if (r > 1.3) return "#ff1744";   // hot red
+    if (r > 1.1) return "#ffb300";   // bright amber
+    return "#00e5ff";                 // neon cyan
   }
 
   function connColor(a: number, b: number): string {
-    if (!stability) return "#22d3ee";
+    if (!stability) return "#00e5ff";
     const r = Math.max(stability[a] ?? 1, stability[b] ?? 1);
-    if (r > 1.3) return "#f87171";
-    if (r > 1.1) return "#fbbf24";
-    return "#22d3ee";
+    if (r > 1.3) return "#ff1744";
+    if (r > 1.1) return "#ffb300";
+    return "#00e5ff";
   }
 
   useEffect(() => {
@@ -129,14 +129,12 @@ export function HandOverlay({
         const ex = wrist[0] + ux * extLen;
         const ey = wrist[1] + uy * extLen;
         const faColor = pointColor(0);
-        ctx.strokeStyle = faColor;
-        ctx.shadowColor = faColor + "99";
-        ctx.shadowBlur = 8;
-        ctx.lineWidth = Math.max(3, dw * 0.006);
-        ctx.beginPath();
-        ctx.moveTo(wrist[0], wrist[1]);
-        ctx.lineTo(ex, ey);
-        ctx.stroke();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = faColor + "25"; ctx.lineWidth = Math.max(3, dw * 0.006) * 3;
+        ctx.beginPath(); ctx.moveTo(wrist[0], wrist[1]); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = faColor; ctx.lineWidth = Math.max(3, dw * 0.006);
+        ctx.beginPath(); ctx.moveTo(wrist[0], wrist[1]); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.globalCompositeOperation = "source-over";
         for (let k = 0.3; k <= 1; k += 0.3) {
           const dx2 = wrist[0] + ux * extLen * k;
           const dy2 = wrist[1] + uy * extLen * k;
@@ -147,33 +145,46 @@ export function HandOverlay({
         }
       }
 
-      // ── Skeleton connections (thick + glow MATCHING each line's colour) ──
-      ctx.lineWidth = Math.max(3, dw * 0.008);
-      ctx.shadowBlur = 8;
+      // ── Neon skeleton connections (triple-pass: wide glow → mid → bright core) ──
+      ctx.globalCompositeOperation = "lighter"; // additive → colours pop like neon
+      const baseW = Math.max(3, dw * 0.008);
       for (const [a, b] of HAND_CONNECTIONS) {
         const c = connColor(a, b);
+        // wide glow
+        ctx.strokeStyle = c + "25";
+        ctx.lineWidth = baseW * 3.5;
+        ctx.beginPath(); ctx.moveTo(px[a][0], px[a][1]); ctx.lineTo(px[b][0], px[b][1]); ctx.stroke();
+        // mid glow
+        ctx.strokeStyle = c + "55";
+        ctx.lineWidth = baseW * 2;
+        ctx.beginPath(); ctx.moveTo(px[a][0], px[a][1]); ctx.lineTo(px[b][0], px[b][1]); ctx.stroke();
+        // bright core
         ctx.strokeStyle = c;
-        ctx.shadowColor = c + "99"; // glow matches the line colour (not hardcoded cyan!)
-        ctx.beginPath();
-        ctx.moveTo(px[a][0], px[a][1]);
-        ctx.lineTo(px[b][0], px[b][1]);
-        ctx.stroke();
+        ctx.lineWidth = baseW;
+        ctx.beginPath(); ctx.moveTo(px[a][0], px[a][1]); ctx.lineTo(px[b][0], px[b][1]); ctx.stroke();
       }
 
-      // ── Landmark points (big + glow, colour per stability) ──
-      ctx.shadowBlur = 6;
+      // ── Glossy orb points (halo → core → white highlight = 3D sphere) ──
+      const pr = Math.max(4, dw * 0.009);
       for (let i = 0; i < px.length; i++) {
-        ctx.fillStyle = pointColor(i);
-        ctx.shadowColor = pointColor(i) + "88";
-        ctx.beginPath();
-        ctx.arc(px[i][0], px[i][1], Math.max(4, dw * 0.009), 0, Math.PI * 2);
-        ctx.fill();
-        // white ring for contrast
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = "rgba(255,255,255,0.4)";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.shadowBlur = 6;
+        const c = pointColor(i);
+        const x = px[i][0], y = px[i][1];
+        // outer halo
+        ctx.fillStyle = c + "30";
+        ctx.beginPath(); ctx.arc(x, y, pr * 2.8, 0, Math.PI * 2); ctx.fill();
+        // mid glow
+        ctx.fillStyle = c + "70";
+        ctx.beginPath(); ctx.arc(x, y, pr * 1.6, 0, Math.PI * 2); ctx.fill();
+        // bright core
+        ctx.fillStyle = c;
+        ctx.beginPath(); ctx.arc(x, y, pr, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalCompositeOperation = "source-over";
+      // white highlights (glossy 3D look — drawn on top, normal blend)
+      for (let i = 0; i < px.length; i++) {
+        const x = px[i][0], y = px[i][1];
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.beginPath(); ctx.arc(x - pr * 0.3, y - pr * 0.3, pr * 0.35, 0, Math.PI * 2); ctx.fill();
       }
       ctx.shadowBlur = 0;
 
@@ -181,7 +192,7 @@ export function HandOverlay({
       const legX = ox + 8;
       const legY = oy + dh - 60;
       ctx.font = `${Math.max(10, dw * 0.02)}px monospace`;
-      [["#22d3ee", "stable"], ["#fbbf24", "borderline"], ["#f87171", "unstable"]].forEach(
+      [["#00e5ff", "stable"], ["#ffb300", "borderline"], ["#ff1744", "unstable"]].forEach(
         ([c, label], idx) => {
           ctx.fillStyle = c as string;
           ctx.beginPath();
