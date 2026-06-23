@@ -50,14 +50,19 @@ export default function App() {
     setError("");
     setReport(null);
     try {
-      const resp = await fetch(`/samples/${name}.mp4`);
-      if (!resp.ok) throw new Error(`sample ${name} not found`);
-      const blob = await resp.blob();
+      // Fetch video + PRE-BAKED result in parallel → overlay appears with video instantly
+      const [videoResp, resultResp] = await Promise.all([
+        fetch(`/samples/${name}.mp4`),
+        fetch(`/samples/${name}_result.json`),
+      ]);
+      if (!videoResp.ok) throw new Error(`sample video not found`);
+      if (!resultResp.ok) throw new Error(`sample result not found`);
+      const blob = await videoResp.blob();
+      const result = (await resultResp.json()) as OneReport;
       const f = new File([blob], `${name}.mp4`, { type: "video/mp4" });
       setFile(f);
       setUrl(URL.createObjectURL(f));
-      const r = await analyzeOne(f);
-      setReport(r);
+      setReport(result); // overlay + scores available IMMEDIATELY (no backend wait)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
