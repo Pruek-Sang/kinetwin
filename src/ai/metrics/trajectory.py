@@ -28,7 +28,7 @@ _EPS: float = 1e-9
 #: before any derivative / length computation. Real MediaPipe landmarks jitter;
 #: a small window removes sensor noise without erasing real low-frequency
 #: movement. Set to <= 1 to disable smoothing.
-DEFAULT_SMOOTH_WINDOW: int = 5
+DEFAULT_SMOOTH_WINDOW: int = 11
 
 
 @dataclass(frozen=True)

@@ -79,6 +79,50 @@ export function ReferenceSkeletonPlayer({ playing }: Props) {
     loader.load(
       "/reference_hand.glb",
       (gltf) => {
+        // Apply Premium Medical Holographic Materials
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            const name = mesh.name.toLowerCase();
+
+            if (name.includes("cup")) {
+              // Frosted Red Glass
+              mesh.material = new THREE.MeshPhysicalMaterial({
+                color: 0xf87171, // kt-red
+                transmission: 0.7,
+                opacity: 1,
+                transparent: true,
+                roughness: 0.35,
+                ior: 1.5,
+                side: THREE.DoubleSide,
+              });
+            } else if (name.includes("sphere") || name.includes("joint")) {
+              // Neon Joints (Cyan)
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x22d3ee, // kt-cyan
+                emissive: 0x22d3ee,
+                emissiveIntensity: 1.2,
+                roughness: 0.2,
+                metalness: 0.8,
+              });
+            } else {
+              // Holographic / X-Ray Bones (Glassmorphism)
+              mesh.material = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                emissive: 0x22d3ee,
+                emissiveIntensity: 0.15,
+                transmission: 0.9,
+                opacity: 1,
+                transparent: true,
+                roughness: 0.1,
+                ior: 1.2,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1,
+              });
+            }
+          }
+        });
+
         scene.add(gltf.scene);
 
         // Setup animation

@@ -27,7 +27,14 @@ from .speed import wrist_mean_speed
 from .trajectory import HandTrajectory
 
 # Weights for the composite dexterity score (sum to 1.0).
-DEFAULT_WEIGHTS: dict[str, float] = {"speed": 0.34, "accuracy": 0.33, "quality": 0.33}
+DEFAULT_WEIGHTS: dict[str, float] = {"speed": 0.20, "accuracy": 0.10, "quality": 0.70}
+
+#: Soft margin applied during scoring so real human movement (which has natural
+#: variation and can never match a synthetic ideal) is not over-penalised.
+#: Quality: ``baseline_jerk * QUALITY_MARGIN / patient_jerk`` -- a patient can
+#: be up to MARGIN× jerkier than baseline and still score 100.
+QUALITY_MARGIN: float = 1.5
+SPEED_MARGIN: float = 1.5
 
 # Gap (in 0..100 points) above which the weaker hand is flagged as a
 # Learned Non-Use candidate. ~20 points is a clinically noticeable difference.
@@ -107,20 +114,19 @@ def score_hand(
     """Normalise raw metrics to 0..100 and combine into a composite."""
     raw = raw_metrics(traj)
 
-    # Speed: higher is better.
+    # Speed: higher is better (softened so real movement isn't over-penalised).
     if baseline.mean_speed > 0:
-        speed_score = _clip01(raw["mean_speed"] / baseline.mean_speed) * 100.0
+        speed_score = _clip01(raw["mean_speed"] * SPEED_MARGIN / baseline.mean_speed) * 100.0
     else:
         speed_score = 0.0
 
     # Accuracy: straightness already in (0, 1] -> map directly.
     accuracy_score = _clip01(raw["straightness"]) * 100.0
 
-    # Quality: dimensionless jerk, lower is better -> invert the ratio.
+    # Quality: dimensionless jerk, lower = better -> invert ratio with soft margin.
     nc = raw["dimensionless_jerk"]
     if baseline.dimensionless_jerk > 0 and math.isfinite(nc) and nc > 0:
-        # A hand as smooth as the baseline scores 100; rougher hands score less.
-        quality_score = _clip01(baseline.dimensionless_jerk / nc) * 100.0
+        quality_score = _clip01(baseline.dimensionless_jerk * QUALITY_MARGIN / nc) * 100.0
     else:
         quality_score = 0.0
 

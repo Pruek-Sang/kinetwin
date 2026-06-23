@@ -60,8 +60,13 @@ def samples_to_trajectories(
     """
     grouped: dict[str, list[np.ndarray]] = {}
     for det in detections:
-        for handedness, world, _image in det.hands:
-            grouped.setdefault(handedness, []).append(np.asarray(world, dtype=float))
+        for handedness, _world, image in det.hands:
+            # Use IMAGE landmarks (normalised x,y) instead of world (3D x,y,z)
+            # because MediaPipe's z (monocular depth) is extremely noisy and
+            # explodes jerk (3rd derivative). z=0 padding keeps the (21,3) shape.
+            img = np.asarray(image, dtype=float)          # (21, 2)
+            img3 = np.column_stack([img, np.zeros(img.shape[0])])  # (21, 3)
+            grouped.setdefault(handedness, []).append(img3)
 
     tracked: list[TrackedHand] = []
     for handedness, samples in grouped.items():
