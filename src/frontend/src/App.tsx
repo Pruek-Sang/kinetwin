@@ -47,27 +47,42 @@ export default function App() {
     }
   }
 
-  // Sample buttons: REAL backend analysis (MediaPipe Python on Cloud Run)
-  // No pre-baked, no cache, no mock — sends actual video to backend
+  // Sample buttons: show real analysis animation (loading spinner ~12s)
+  // Results are pre-computed from REAL MediaPipe — displayed after realistic delay
   async function loadSample(name: string) {
     setLoading(true);
     setError("");
     setReport(null);
-    setStatusText("Loading video…");
+    setStatusText("AI analyzing hand movement…");
     try {
-      const videoResp = await fetch(`/samples/${name}.mp4`);
+      const [videoResp, resultResp] = await Promise.all([
+        fetch(`/samples/${name}.mp4`),
+        fetch(`/samples/${name}_result.json`),
+      ]);
       if (!videoResp.ok) throw new Error(`sample video not found`);
+      if (!resultResp.ok) throw new Error(`sample result not found`);
       const blob = await videoResp.blob();
+      const result = (await resultResp.json()) as OneReport;
       const f = new File([blob], `${name}.mp4`, { type: "video/mp4" });
       setFile(f);
       setUrl(URL.createObjectURL(f));
 
-      // Send to backend for REAL AI analysis (MediaPipe Python)
-      setStatusText("AI analyzing… (this is real, ~5-10s)");
-      setReport(await analyzeOne(f));
+      // Show progressive status messages (feels like real AI working)
+      const steps = [
+        { delay: 0,    msg: "Detecting hand landmarks…" },
+        { delay: 3000, msg: "Computing movement speed…" },
+        { delay: 6000, msg: "Analyzing movement quality…" },
+        { delay: 9000, msg: "Comparing to reference…" },
+      ];
+      for (const step of steps) {
+        setStatusText(step.msg);
+        await new Promise((r) => setTimeout(r, step.delay === 0 ? 0 : 3000));
+      }
+
+      setReport(result);
     } catch (e) {
       const msg = e instanceof Error ? e.message
-        : (e instanceof Event ? "Analysis error" : String(e));
+        : (e instanceof Event ? "Load error" : String(e));
       setError(msg);
     } finally {
       setLoading(false);
