@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install deps
-        run: pip install -r src/backend/requirements.txt pytest
+        run: pip install -r src/backend/requirements.txt pytest httpx
       - name: Run tests
         run: python -m pytest -q
 
