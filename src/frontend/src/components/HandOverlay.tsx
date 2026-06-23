@@ -64,7 +64,20 @@ export function HandOverlay({
       else { dh = h; dw = h * vr; ox = (w - dw) / 2; oy = (h - dh) / 2; }
 
       const fi = Math.round(video.currentTime * overlay.fps);
-      const lm = overlay.frames[Math.max(0, Math.min(overlay.frames.length - 1, fi))];
+      const clamped = Math.max(0, Math.min(overlay.frames.length - 1, fi));
+      let lm = overlay.frames[clamped];
+      // If current frame is null (hand not detected), use last non-null frame
+      // so overlay stays visible instead of disappearing
+      if (!lm) {
+        for (let i = clamped; i >= 0; i--) {
+          if (overlay.frames[i]) { lm = overlay.frames[i]; break; }
+        }
+        if (!lm) {
+          for (let i = clamped + 1; i < overlay.frames.length; i++) {
+            if (overlay.frames[i]) { lm = overlay.frames[i]; break; }
+          }
+        }
+      }
       if (!lm) { raf = requestAnimationFrame(draw); return; }
       const px = lm.map((p) => [ox + p[0] * dw, oy + p[1] * dh]);
 

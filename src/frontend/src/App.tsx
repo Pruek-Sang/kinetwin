@@ -47,29 +47,27 @@ export default function App() {
     }
   }
 
-  // Sample buttons: pre-computed results (REAL MediaPipe Python — cached for instant display)
-  // Overlay + colours are 100% real, just computed ahead of time for speed
+  // Sample buttons: REAL backend analysis (MediaPipe Python on Cloud Run)
+  // No pre-baked, no cache, no mock — sends actual video to backend
   async function loadSample(name: string) {
     setLoading(true);
     setError("");
     setReport(null);
-    setStatusText("Loading…");
+    setStatusText("Loading video…");
     try {
-      const [videoResp, resultResp] = await Promise.all([
-        fetch(`/samples/${name}.mp4`),
-        fetch(`/samples/${name}_result.json`),
-      ]);
+      const videoResp = await fetch(`/samples/${name}.mp4`);
       if (!videoResp.ok) throw new Error(`sample video not found`);
-      if (!resultResp.ok) throw new Error(`sample result not found`);
       const blob = await videoResp.blob();
-      const result = (await resultResp.json()) as OneReport;
       const f = new File([blob], `${name}.mp4`, { type: "video/mp4" });
       setFile(f);
       setUrl(URL.createObjectURL(f));
-      setReport(result);
+
+      // Send to backend for REAL AI analysis (MediaPipe Python)
+      setStatusText("AI analyzing… (this is real, ~5-10s)");
+      setReport(await analyzeOne(f));
     } catch (e) {
       const msg = e instanceof Error ? e.message
-        : (e instanceof Event ? "Load error" : String(e));
+        : (e instanceof Event ? "Analysis error" : String(e));
       setError(msg);
     } finally {
       setLoading(false);
