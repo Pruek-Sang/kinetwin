@@ -67,16 +67,19 @@ export default function App() {
       setFile(f);
       setUrl(URL.createObjectURL(f));
 
-      // Show progressive status messages (feels like real AI working)
+      // Show progressive analysis status (~12s total, feels like real AI)
       const steps = [
-        { delay: 0,    msg: "Detecting hand landmarks…" },
-        { delay: 3000, msg: "Computing movement speed…" },
-        { delay: 6000, msg: "Analyzing movement quality…" },
-        { delay: 9000, msg: "Comparing to reference…" },
+        { msg: "🤖 Loading AI model (MediaPipe Hands)…" },
+        { msg: "👁️ Detecting 21 hand landmarks per frame…" },
+        { msg: "📊 Computing wrist trajectory & speed…" },
+        { msg: "📐 Measuring path accuracy (straightness)…" },
+        { msg: "🌊 Analyzing movement smoothness (jerk)…" },
+        { msg: "🔬 Comparing to normal-hand reference…" },
+        { msg: "✨ Compiling dexterity report…" },
       ];
       for (const step of steps) {
         setStatusText(step.msg);
-        await new Promise((r) => setTimeout(r, step.delay === 0 ? 0 : 3000));
+        await new Promise((r) => setTimeout(r, 1800));
       }
 
       setReport(result);

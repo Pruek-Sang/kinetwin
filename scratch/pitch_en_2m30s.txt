@@ -1,0 +1,23 @@
+# KineTwin Pitch Script (2:30 Min Version)
+# Word Count: ~300 words (Ideal for 2:30 speech with sound effects and demo pacing)
+
+[Sound Cue: Ambient BGM starts softly in the background]
+
+Hello judges. Do you know what the most terrifying silent threat is for elderly patients suffering from Sarcopenia? It is the vicious cycle of "Learned Non-Use." When one arm is weak, patients avoid using it and compensate with their dominant arm. Over time, the brain literally "forgets" how to control the weak arm, leading to loss of balance and critical fall risks.
+
+How do we detect this at home without expensive, complex sensors? 
+
+Welcome to KineTwin, a Kinematic Digital Twin system for detecting Learned Non-Use. Using the "AI Vibe Coding" approach, we integrated AI Computer Vision with Interactive 3D WebGL to transform ordinary webcam pixels into precise Digital Biomarkers.
+
+[Sound Cue: SFX 01 - Hologram Scan / Activation]
+Our system features a real-time split-screen interface. On the left, we analyze the patient's video using Google MediaPipe to track 21 hand joints. On the right is our highlight: the Reference Hologram, an anatomically perfect 3D skeleton exported from Blender. 
+
+[Sound Cue: SFX 02 - Data Processing Beeps]
+By comparing the patient's movement frame-by-frame against this Digital Twin in 3D, we extract three clinical metrics: Speed, to measure hesitation; Accuracy, to measure movement path deviation; and Quality, to detect tremors. 
+
+[Sound Cue: SFX 03 - Warning Alert]
+If a significant deviation or compensatory movement is detected, KineTwin immediately flags the arm for Learned Non-Use risk. 
+
+In the future, this system will empower patients to perform tasks at home, sending structured movement data directly to therapists. We can even integrate Agentic AI to provide personalized feedback and exercises.
+
+KineTwin brings Clinical Minimalism—clean, trustworthy, and accessible. Because we believe the best technology is the one that leaves no one behind. Thank you.
